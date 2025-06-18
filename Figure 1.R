@@ -6,8 +6,6 @@ gc()
 library(tidyverse)
 library(ggridges)
 library(ggrepel)
-library(Cairo)
-library(cowplot)
 library(patchwork)
 library(scales)
 
