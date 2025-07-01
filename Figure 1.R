@@ -8,6 +8,7 @@ library(ggridges)
 library(ggrepel)
 library(patchwork)
 library(scales)
+source("color_palettes.R")
 
 #get inputs####
 scDNAobj_list <- readRDS("inputs/all_cells.rds")
@@ -30,6 +31,14 @@ for(i in c(1:length(scDNAobj_list))){
 }
 bins_meta <- bind_rows(bins_meta)
 
+#create tables#####
+##table summarising sequencing metrics
+cells_meta %>%
+  group_by(sample) %>%
+  summarise(n_SPCs = n(), 
+            total_count = sum(n_reads),
+            median_count_per_SPC = median(n_reads))
+
 #plot the figures####
 ##plot placeholder for figure 1A####
 
@@ -42,11 +51,15 @@ figure_1A <- ggplot()+
 
 ##plot figure 1B####
 figure_1B <- cells_meta %>%
+  mutate(sample = paste("Sample", sample)) %>%
   ggplot(aes(x = n_reads, y = fct_rev(factor(sample)), fill = factor(sample)))+
   geom_density_ridges(alpha = 0.5)+
-  scale_x_continuous(transform = "log10")+
-  labs(x = "Total read count", y = "Sample")+
-  guides(fill = "none")
+  scale_x_continuous(transform = "log10", breaks = c(2000, 17000, 170000, 900000))+
+  scale_y_discrete(name = NULL)+
+  scale_fill_manual(values = sample_colors)+
+  labs(x = "Total read count (log10 scale)", y = "Sample")+
+  guides(fill = "none")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), panel.grid.minor = element_blank())
 
 ##plot figure 1C####
 figure_1C <- cells_meta %>%
@@ -145,7 +158,7 @@ final <- (top / middle / figure_1E / bottom)+
     axis.title = element_text(size = 10),
     text = element_text(size = 10))
 
-#save the final figure
+#save the final figure panel####
 plot_scale <- 1.8
 ggsave("figure_1.pdf", plot = final, width = 8.27 * plot_scale, height = 9 * plot_scale)
 
