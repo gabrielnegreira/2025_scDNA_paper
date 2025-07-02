@@ -163,4 +163,8 @@ plot_scale <- 1.8
 ggsave("figure_1.pdf", plot = final, width = 8.27 * plot_scale, height = 9 * plot_scale)
 
 #open it
-system2('open', args = "figure_1.pdf", wait = FALSE)
+if (Sys.info()["sysname"] == "Darwin") {
+  system2("open", args = "figure_1.pdf", wait = FALSE)
+} else if (Sys.info()["sysname"] == "Linux") {
+  system2("xdg-open", args = "figure_1.pdf", wait = FALSE)
+}

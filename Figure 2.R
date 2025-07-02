@@ -51,8 +51,8 @@ color_palette <- heat_col(breaks)
 names(color_palette) <- breaks
 #create the plot list where both plots will be stored
 plot_list <- list()
-#make the same plot for samples 1 (index 1) and sample 6 (index 5 because sample 4 was removed from true_cells)
-for(i in c(1, 5)){
+#make the same plot for samples 2 (index 2) and sample 6 (index 5 because sample 4 was removed from true_cells)
+for(i in c(2, 5)){
   #remove outlier bins
   bins <- true_cells[[i]]$metadata$bins_meta %>%
     filter(!is_outlier & is_mappable) %>%
@@ -78,7 +78,7 @@ for(i in c(1, 5)){
   #plot density
   dens_plot <- ggplot(data.frame(value = as.vector(matrix_to_plot)), aes(x = value))+
     geom_density()+
-    scale_x_continuous(name = "Normalized Read Count * 2", breaks = c(1:100))
+    scale_x_continuous(name = "Normalized Read Count * 2", breaks = c(1:100), limits = c(1,12))
   
   #plot core heatmap
   hm_plot <- ggheatmap(matrix_to_plot) + #start the heatmap
@@ -102,7 +102,7 @@ for(i in c(1, 5)){
     geom_tile(aes(y = 1, fill = factor(value))) + #add annotation tiles.
     scale_fill_manual(name = "Strain", values = strain_colors)+ #set the annotation colors
     theme_void() & #remove irrelevant elements of the annotation box
-    theme(panel.spacing = unit(0.5, "pt"))  #make the space between row groups smaller.
+    theme(panel.spacing = unit(1, "pt"))  #make the space between row groups smaller.
   
   
   plot_list <- c(plot_list, hm_plot) 
@@ -128,4 +128,8 @@ plot_scale <- 1.8
 ggsave("figure_2.pdf", plot = final, width = 8.27 * plot_scale, height = 5 * plot_scale)
 
 #open it
-system2('open', args = "figure_2.pdf", wait = FALSE)
+if (Sys.info()["sysname"] == "Darwin") {
+  system2("open", args = "figure_2.pdf", wait = FALSE)
+} else if (Sys.info()["sysname"] == "Linux") {
+  system2("xdg-open", args = "figure_2.pdf", wait = FALSE)
+}

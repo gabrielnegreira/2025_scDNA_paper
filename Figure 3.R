@@ -46,8 +46,8 @@ color_palette <- heat_col(breaks) # create the heat color map.
 
 #create the plot list where both plots will be stored
 plot_list <- list()
-#make the same plot for samples 1 (index 1) and sample 6 (index 5 because sample 4 was removed from true_cells)
-for(i in c(1, 5)){
+#make the same plot for samples 2 (index 2) and sample 6 (index 5 because sample 4 was removed from true_cells)
+for(i in c(2, 5)){
 
   #get raw somy matrix
   matrix_to_plot <- true_cells[[i]]$somies$raw_somy_matrix
@@ -223,6 +223,7 @@ to_plot %>%
   mutate(sample = factor(sample, levels = c(1,2,3,5,6, "10X"))) %>%
   ggplot(aes(x = karyo_id, y = fct_rev(chromosome), fill = somy))+
   geom_tile(width = 0.98, col = "#2a5686")+
+  labs(x = "Top 5 karyotypes in each data set", y = "Chromosome", fill = "Somy")+
   facet_grid(rows = vars(strain), cols = vars(sample))+
   scale_fill_manual(values = heat_col(c(1:15)))
 
@@ -232,6 +233,8 @@ to_plot <- to_plot %>%
   mutate(strain = gsub("_.*", "", name)) %>%
   mutate(sample = gsub(".*_", "", name)) %>%
   select(strain, sample, karyotype, ncells)
+
+
 
 #make it pairwise
 to_plot$`10X` <- NA
@@ -304,3 +307,4 @@ ggsave("figure_3.pdf", plot = final, width = 8.27 * plot_scale, height = 9 * plo
 
 #open it
 system2('open', args = "figure_3.pdf", wait = FALSE)
+
