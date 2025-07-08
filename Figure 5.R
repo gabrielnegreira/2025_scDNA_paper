@@ -38,9 +38,11 @@ figure_5A <- pca_data %>%
   mutate(sample = paste("Sample", sample)) %>%
   mutate(strain = ifelse(is.na(strain), "doublet", strain)) %>%
   ggplot(aes(x = PC1, y = PC2, color = strain))+
-  geom_point()+
+  geom_point(size = 0.5)+
   facet_wrap(vars(sample), scales = 'free', nrow = 1)+
-  scale_color_manual(values = c(strain_colors, doublet = "grey"))
+  guides(color = guide_legend(override.aes = list(size = 2)))+
+  scale_color_manual(values = c(strain_colors, doublet = "grey"))+
+  theme_bw()
 
 
 #plot figure 5B####

@@ -247,11 +247,6 @@ for(Strain in unique(to_plot$strain)){
     mutate(`10X` = ifelse(strain == Strain, ncells_in_10X[karyotype], `10X`))
 }
 
-  
-separate(karyotype, sep = "_", into = rownames(karyotypes), remove = FALSE) %>%
-  
-
-
 
 plot <- to_plot %>%
   filter(sample != "10X") %>%
@@ -287,11 +282,11 @@ figure_3D <- plot+scale_fill_manual(values = create_colors(plot$data$color, pale
 
 #since figure 3A is not compatible with patchwork, I have to use ggalign to align it to the figure_3B
 #however it does not allow adding the A/B tags, so I had to do it manually via Inkscape later.
-figure_3_panel <- align_plots(figure_3A , figure_3B, ncol = 1, heights = c(0.8, 0.2), guides = "t")
+#figure_3_panel <- align_plots(figure_3A , figure_3B, ncol = 1, heights = c(0.8, 0.2), guides = "t")
 
 #if I try via patchwork, alignment is off (but tags are added)
 top <- wrap_plots(wrap_elements(ggalignGrob(figure_3A)), figure_3B, nrow = 1, widths = c(0.75, 0.25))
-bottom <- figure_3B + figure_3C + plot_layout(nrow = 1, widths = c(0.4, 0.6))
+bottom <- figure_3B + figure_3D + plot_layout(nrow = 1, widths = c(0.15, 0.85))
 final <- wrap_plots(wrap_elements(ggalignGrob(figure_3A)), bottom, ncol = 1, heights = c(0.7, 0.3))+
   plot_annotation(tag_levels = 'A')&
   theme(plot.tag = element_text(size = 18, face = "bold"),
