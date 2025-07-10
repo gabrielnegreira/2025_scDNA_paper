@@ -132,12 +132,5 @@ scDNA10X <- scDNA10X %>%
   lapply(summarise_karyotypes) %>%
   lapply(karyo_network)
 
-#add relevant info to cells metadata
-for(i in c(1:length(scDNA10X))){
-  df <- scDNA10X[[i]]$metadata$cells_meta
-  df$sample <- "10X"
-  df$strain <- names(scDNA10X)[i]
-  scDNA10X[[i]]$metadata$cells_meta <- df
-}
 #save it to disk
 saveRDS(scDNA10X, paste0(out_dir,"/scDNA10X.rds"))
