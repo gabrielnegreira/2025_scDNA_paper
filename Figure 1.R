@@ -11,8 +11,9 @@ library(scales)
 source("color_palettes.R")
 
 #get inputs####
-scDNAobj_list <- readRDS("inputs/all_cells.rds")
-
+scDNAobj_list <- readRDS("inputs/karyotyping_objects/all_cells.rds")
+true_cells_meta <- xlsx::read.xlsx("inputs/cell_qc/cells_meta.xlsx", sheetIndex = 1, row.names = 1)
+true_cells <- readRDS("inputs/karyotyping_objects/true_cells.rds")
 ##set base theme parameters for ggplot####
 update_geom_defaults("point", list(size = 0.5))
 
@@ -119,11 +120,9 @@ figure_1F <- bins_meta %>%
   geom_smooth(method = "lm", se = FALSE, color = "blue", linewidth = 1) +  # Linear model line
   scale_x_continuous(limits = c(0.5, 0.7))+
   labs(x = "GC content", y = "Normalized Counts")+
-  facet_grid(rows = vars(sample), cols = vars(fct_rev(count_type)), scales = "free")#+
-  #theme(axis.text = element_text(size = 14), axis.title = element_text(size = 18), strip.text = element_text(size = 14))
+  facet_grid(rows = vars(sample), cols = vars(fct_rev(count_type)), scales = "free")
 
 ##plot figure 1G####
-
 #compare raw vs corrected counts
 figure_1G <- bins_meta %>%
   group_by(sample) %>%
@@ -141,17 +140,92 @@ figure_1G <- bins_meta %>%
   scale_color_manual(values = rep(c("black", "orange"), times = 100))+
   guides(color = "none")+
   labs(x = "20 kb bin", y = "Mean count")+
-  facet_grid(cols = vars(fct_rev(count_type)), rows = vars(sample), scale = "free")#+
-  #theme(axis.text = element_text(size = 14), axis.title = element_text(size = 18), strip.text = element_text(size = 14))
+  facet_grid(cols = vars(fct_rev(count_type)), rows = vars(sample), scale = "free")
+
+##plot figure 1H#####
+##compare lorenz curves with and without GC correction
+lorenz_df <- list(raw_counts = lapply(true_cells, function(x)x$counts$raw_counts),
+                  corrected_counts = lapply(true_cells, function(x)x$counts$corrected_counts))
+
+lorenz_df <- lapply(lorenz_df, function(x){
+  x <- x %>%
+    do.call(cbind, .) %>%
+    as.data.frame() %>%
+    rownames_to_column("bin") %>%
+    pivot_longer(cols = -bin, names_to = "cell", values_to = "count") %>%
+    mutate(cell = gsub("_.*", "", cell)) %>%
+    mutate(sample = true_cells_meta[cell,]$sample) %>%
+    group_by(cell) %>%
+    arrange(count, .by_group = TRUE) %>%
+    mutate(order = row_number()) %>%
+    mutate(frac_genome = order/max(order)) %>%
+    mutate(frac_count = cumsum(count)) %>%
+    mutate(frac_count = frac_count/max(frac_count)) %>%
+    group_by(sample, frac_genome) %>%
+    summarise(mean = mean(frac_count), se = sd(frac_count)/sqrt(n()))
+    return(x)
+})
+
+lorenz_df$raw_counts$condition <- "raw"
+lorenz_df$corrected_counts$condition <- "corrected"
+lorenz_df <- bind_rows(lorenz_df)
+
+lorenz_df %>%
+  mutate(condition = fct_rev(factor(condition))) %>%
+  ggplot(aes(x = frac_genome, y = mean, color = sample))+
+  geom_line()+
+  geom_line(data = data.frame(frac_genome = c(0,1), mean = c(0,1)), color = "lightgrey", linetype = "dashed")+
+  geom_ribbon(aes(ymin = mean - se, ymax = mean + se), alpha = 0.2, color = NA)+
+  facet_wrap(vars(condition))+
+  scale_color_manual(values = sample_colors)+
+  theme_bw()
+
+##plot figure 1F####
+figure_1F <- true_cells_meta %>%
+  select(strain, sample, fraction_1, fraction_5, fraction_1_sub) %>%
+  pivot_longer(cols = -c(strain, sample), names_to = "fraction") %>%
+  mutate(fraction = c(fraction_1 = "covered at least 1x", 
+                      fraction_5 = "covered at least 5x", 
+                      fraction_1_sub = "covered at least 1x\n(subsampled to 100.000 reads per cell)")[fraction]) %>%
+  mutate(fraction = factor(fraction, levels = unique(fraction)[c(1,3,2)])) %>%
+  ggplot(aes(x = sample, y = value, fill = sample))+
+  geom_violin(scale = "width")+
+  geom_boxplot(fill = "white", width = 0.25)+
+  scale_fill_manual(values = sample_colors)+
+  scale_x_discrete(name = NULL, breaks = NULL)+
+  scale_y_continuous(name = "Percentage of the genome")+
+  facet_wrap(vars(fraction), nrow = 1, scales = "free")+
+  coord_cartesian(clip = FALSE)+
+  theme_minimal()
+
+##plot figure 1G####
+plot_list <- list()
+for(metric in c("gini", "mapd", "ICCV", "ICF_score", "mean_coverage")){
+  plot_list[[metric]] <- true_cells_meta %>%
+    mutate(plot_label = metric) %>%
+    ggplot(aes(x = factor(sample), y = .data[[metric]]))+
+    geom_violin(aes(fill = factor(sample)))+
+    geom_boxplot(width = 0.075)+
+    labs(x = NULL, y = metric)+
+    guides(fill = "none")+
+    scale_fill_manual(values = sample_colors)+
+    theme_bw()+
+    theme(panel.grid = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))+
+    facet_wrap(vars(plot_label))
+}
+
+#combine them
+figure_1G <- patchwork::wrap_plots(plot_list)
 
 #ccombine the figures in a single panel####
 top <- figure_1A + figure_1B + plot_layout(widths = c(0.875, 0.125))
 middle <- figure_1C + figure_1D + plot_layout(widths = c(0.875, 0.125))
-bottom <- figure_1F + figure_1G + plot_layout(widths = c(0.3, 0.7))
+bottom <- figure_1F
 
-final <- (top / middle / figure_1E / bottom)+
+final <- (top / middle / figure_1E / figure_1F)+
   plot_annotation(tag_levels = 'A')+ 
-  plot_layout(heights = c(0.125, 0.125, 0.15, 0.7))&
+  plot_layout(heights = c(0.25, 0.25, 0.25, 0.25))&
   theme(plot.tag = element_text(size = 18, face = "bold"),
     plot.tag.position   = c(0, 1),    # top-left corner
     plot.tag.background = element_rect(fill = NA, colour = NA),
@@ -160,7 +234,7 @@ final <- (top / middle / figure_1E / bottom)+
 
 #save the final figure panel####
 plot_scale <- 1.8
-ggsave("figure_1.pdf", plot = final, width = 8.27 * plot_scale, height = 9 * plot_scale)
+ggsave("figure_1.pdf", plot = final, width = 8.27 * plot_scale, height = 6 * plot_scale)
 
 #open it
 if (Sys.info()["sysname"] == "Darwin") {

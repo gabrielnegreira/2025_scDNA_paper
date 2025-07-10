@@ -11,8 +11,8 @@ source("scDNA_functions_S3.R")
 source("color_palettes.R")
 
 #get inputs####
-true_cells <- readRDS("inputs/true_cells.rds")
-scDNA10X <- readRDS("inputs/scDNA10X.rds")
+true_cells <- readRDS("inputs/karyotyping_objects/true_cells.rds")
+scDNA10X <- readRDS("inputs/karyotyping_objects/scDNA10X.rds")
 
 ##set base theme parameters for ggplot####
 update_geom_defaults("point", list(size = 0.5))
@@ -133,3 +133,41 @@ if (Sys.info()["sysname"] == "Darwin") {
 } else if (Sys.info()["sysname"] == "Linux") {
   system2("xdg-open", args = "figure_2.pdf", wait = FALSE)
 }
+
+figure_1F <- bins_meta %>%
+  select(sample, gc_content, mean_raw_counts, mean_corrected_counts) %>%
+  filter(sample != "4") %>%
+  pivot_longer(cols = c(mean_raw_counts, mean_corrected_counts), values_to = "count", names_to = "count_type") %>%
+  mutate(count_type = c(mean_raw_counts = "Raw Counts", mean_corrected_counts = "Corrected Counts")[count_type]) %>%
+  group_by(sample, count_type) %>%
+  filter(!count %in% boxplot.stats(count)$out) %>%
+  mutate(sample = paste("Sample", sample)) %>%
+  ggplot(aes(x = gc_content, y = count))+
+  geom_point()+
+  geom_smooth(method = "lm", se = FALSE, color = "blue", linewidth = 1) +  # Linear model line
+  scale_x_continuous(limits = c(0.5, 0.7))+
+  labs(x = "GC content", y = "Normalized Counts")+
+  facet_grid(rows = vars(sample), cols = vars(fct_rev(count_type)), scales = "free")#+
+#theme(axis.text = element_text(size = 14), axis.title = element_text(size = 18), strip.text = element_text(size = 14))
+
+##plot figure 1G####
+
+#compare raw vs corrected counts
+figure_1G <- bins_meta %>%
+  group_by(sample) %>%
+  mutate(bin_position = row_number()) %>%
+  filter(!is_outlier & !is_empty) %>%
+  filter(sample != "4") %>%
+  mutate(sample = paste("Sample", sample)) %>%
+  pivot_longer(cols = c("mean_raw_counts", "mean_corrected_counts"), names_to = "count_type", values_to = "count") %>%
+  group_by(sample, chromosome) %>%
+  filter(!count %in% boxplot.stats(count)) %>%
+  mutate(count_type = c(mean_raw_counts = "Raw Counts", mean_corrected_counts = "Corrected Counts")[count_type]) %>%
+  ggplot(aes(x = bin_position, y = count, color = chromosome))+
+  geom_point()+
+  #geom_boxplot(outliers = FALSE)+
+  scale_color_manual(values = rep(c("black", "orange"), times = 100))+
+  guides(color = "none")+
+  labs(x = "20 kb bin", y = "Mean count")+
+  facet_grid(cols = vars(fct_rev(count_type)), rows = vars(sample), scale = "free")#+
+#theme(axis.text = element_text(size = 14), axis.title = element_text(size = 18), strip.text = element_text(size = 14))
