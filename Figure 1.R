@@ -12,17 +12,14 @@ source("color_palettes.R")
 
 #get inputs####
 scDNAobj_list <- readRDS("inputs/karyotyping_objects/all_cells.rds")
-true_cells_meta <- xlsx::read.xlsx("inputs/cell_qc/cells_meta.xlsx", sheetIndex = 1, row.names = 1)
+cells_meta <- read_delim("inputs/cell_qc/cells_meta.tsv") %>%
+  column_to_rownames("rowname")
 true_cells <- readRDS("inputs/karyotyping_objects/true_cells.rds")
+
 ##set base theme parameters for ggplot####
 update_geom_defaults("point", list(size = 0.5))
 
 #bind cells meta####
-cells_meta <- list()
-for(i in c(1:length(scDNAobj_list))){
-  cells_meta[[i]] <- scDNAobj_list[[i]]$metadata$cells_meta
-}
-cells_meta <- bind_rows(cells_meta)
 
 #bind bins_meta####
 bins_meta <- list()
@@ -52,13 +49,12 @@ figure_1A <- ggplot()+
 
 ##plot figure 1B####
 figure_1B <- cells_meta %>%
-  mutate(sample = paste("Sample", sample)) %>%
   ggplot(aes(x = n_reads, y = fct_rev(factor(sample)), fill = factor(sample)))+
   geom_density_ridges(alpha = 0.5)+
   scale_x_continuous(transform = "log10", breaks = c(2000, 17000, 170000, 900000))+
   scale_y_discrete(name = NULL)+
   scale_fill_manual(values = sample_colors)+
-  labs(x = "Total read count (log10 scale)", y = "Sample")+
+  labs(x = "Total reads per cell (log10 scale)", y = "Sample")+
   guides(fill = "none")+
   theme(axis.text.x = element_text(angle = 45, hjust = 1), panel.grid.minor = element_blank())
 

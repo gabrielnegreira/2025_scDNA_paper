@@ -53,16 +53,16 @@ true_cells <- lapply(true_cells, function(x){
     x <- median(x)
     return(x)
   })
-  x$metadata$cells_meta$gini_new <- gini[rownames(x$metadata$cells_meta)]
-  x$metadata$cells_meta$mapd_new <- mapd[rownames(x$metadata$cells_meta)]
+  x$metadata$cells_meta$gini <- gini[rownames(x$metadata$cells_meta)]
+  x$metadata$cells_meta$mapd <- mapd[rownames(x$metadata$cells_meta)]
   return(x)
 })
 
-#replace old gini and mapd values by new ones (temporary, should remove old gini and mapd values from the scrip)
-true_cells <- lapply(true_cells, function(x){
+#fix sample column in 10X objects
+lapply(true_cells, function(x){
   x$metadata$cells_meta <- x$metadata$cells_meta %>%
-    rename(gini = gini_new, mapd = mapd_new)
-  return(x)
+    mutate(experiment = ifelse(sample == "10X", "10X", "atrandi")) %>%
+    mutate(sample = ifelse("sample" == ))
 })
 
 #bind the metadata
@@ -81,7 +81,9 @@ qc_df <- reduce(qc_files, full_join, by = "barcode_correct") %>%
 #bind it to the cells_meta
 cells_meta <- cbind(cells_meta, qc_df[rownames(cells_meta),])
 
-
 #export the cells_meta
-write.xlsx(cells_meta, file = "inputs/cell_qc/cells_meta.xlsx")
+cells_meta %>%
+  rownames_to_column("rowname") %>%
+  write_delim(file = "inputs/cell_qc/cells_meta.tsv")
+#write.xlsx(cells_meta, file = "inputs/cell_qc/cells_meta.xlsx")
 
