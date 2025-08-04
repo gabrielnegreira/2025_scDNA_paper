@@ -22,24 +22,18 @@ source("color_palettes.R")
 #get inputs####
 true_cells <- readRDS("inputs/karyotyping_objects/true_cells.rds")
 scDNA10X <- readRDS("inputs/karyotyping_objects/scDNA10X.rds")
+cells_meta <- read_delim("inputs/cell_qc/cells_meta.tsv") %>%
+  column_to_rownames("rowname") %>%
+  filter(cell_or_background == "cell" & strain != "doublet" & sample != "Sample 4")
 
 ##set base theme parameters for ggplot####
 update_geom_defaults("point", list(size = 0.5))
-
-#bind cells meta####
-cells_meta <- lapply(c(true_cells, scDNA10X), function(x)x$metadata$cells_meta)
-cells_meta <- lapply(cells_meta, function(x){
-  x$sample <- as.character(x$sample) 
-  return(x)})
-cols = Reduce(intersect, lapply(cells_meta, names))
-cells_meta <- lapply(cells_meta, function(x)x[,cols])
-cells_meta <- bind_rows(cells_meta)
 
 #plot figures####
 ##plot_figure 3A####
 ###creat a color pallete
 breaks <- lapply(true_cells, function(x)x$somies$raw_somy_matrix) #get the somies for each sample
-breaks <- breaks[c(1,5)] #subset only samples 1 and 5
+breaks <- breaks[c("Sample 2","Sample 6")] #subset only samples 2 and 6
 breaks <- unique(as.integer(unlist(breaks))) #get all possible somy values
 breaks <- c(0:max(breaks)) #set the breaks to 0 to the maximum possible somy.
 color_palette <- heat_col(breaks) # create the heat color map.
@@ -47,26 +41,23 @@ color_palette <- heat_col(breaks) # create the heat color map.
 #create the plot list where both plots will be stored
 plot_list <- list()
 #make the same plot for samples 2 (index 2) and sample 6 (index 5 because sample 4 was removed from true_cells)
-for(i in c(2, 5)){
+for(Sample in c("Sample 2", "Sample 6")){
 
   #get raw somy matrix
-  matrix_to_plot <- true_cells[[i]]$somies$raw_somy_matrix
+  matrix_to_plot <- true_cells[[Sample]]$somies$raw_somy_matrix
   
+  #make it 
   #get cells' strain
-  strains <- true_cells[[i]]$metadata$cells_meta %>%
+  strains <- true_cells[[Sample]]$metadata$cells_meta %>%
     rownames_to_column("cell") %>%
     select(cell, strain) %>%
     deframe()
-  
-  #get the sample
-  sample <- unique(true_cells[[i]]$metadata$cells_meta$sample)
   
   #plot density
   dens_plot <- ggplot(data.frame(value = as.vector(matrix_to_plot)), aes(x = value))+
     geom_density()+
     scale_x_continuous(name = "Raw Somies", breaks = c(1:100))
   
-  #plot core heatmap
   #plot core heatmap
   hm_plot <- ggheatmap(matrix_to_plot) + #start the heatmap
     scale_fill_gradientn(name = "Raw Somies", colors = color_palette, breaks = breaks, limits = c(0, max(breaks))) + #set the fill scale
@@ -75,7 +66,7 @@ for(i in c(2, 5)){
     align_order(rev(rownames(matrix_to_plot)))+ #reverse the order of the plot
     anno_top(size = 0.2) + #create an anotation space in the top
     free_border(dens_plot, borders = "l") + #align the density plot on top of the matrix
-    patch_titles(top = paste("Sample", sample))+ #add a title to the top annotation
+    patch_titles(top = Sample)+ #add a title to the top annotation
     anno_top() + #create another annotation space at the top
     align_dendro(method = "ward.D2", size = 0.3)+ #add the dendogram (which also reorders the columns)
     theme_void()+ #remove irrelevant elements of the dendogram plot
@@ -86,8 +77,7 @@ for(i in c(2, 5)){
     theme_void()
   
   plot_list <- c(plot_list, hm_plot) 
-  
-  }
+}
 
 #align both figures
 figure_3A <- ggalign::align_plots(!!!plot_list, guides = "r")
@@ -96,15 +86,13 @@ figure_3A <- ggalign::align_plots(!!!plot_list, guides = "r")
 to_plot <- cells_meta %>%
   filter(strain != "doublet") %>%
   filter(!is.na(karyotype)) %>%
-  group_by(strain, sample, karyotype) %>%
+  group_by(strain, experiment, sample, karyotype) %>%
   summarise(ncells = n()) %>%
   group_by(sample, strain) %>%
   arrange(desc(ncells), .by_group = TRUE) %>%
   mutate(proportion = ncells/sum(ncells)) %>%
   mutate(karyo_position = as.integer(fct_reorder(karyotype, desc(ncells)))) %>%
   mutate(karyo_id = paste0("kar", karyo_position)) %>%
-  mutate(sample = ifelse(sample != "10X", paste("Sample", sample), sample)) %>%
-  mutate(sample = factor(sample, levels = c(paste("Sample", c(1,2,3,5,6)), "10X"))) %>%
   ungroup()
 
 #create barplots on top
@@ -112,7 +100,7 @@ plot_list <-list()
 for(Strain in c("BPK081", "HU3")){
   karyo_in_10X <- to_plot %>%
     filter(strain == Strain) %>%
-    filter(sample == "10X") %>%
+    filter(experiment == "10X") %>%
     select(karyotype, karyo_position) %>%
     deframe()
   
@@ -181,18 +169,17 @@ figure_3B <- ggalign::align_plots(!!!plot_list, guides = "r")
 
 ##plot figure 3C####
 to_plot <- to_plot %>%
-  select(-proportion, -karyo_position, -karyo_id) %>%
-  pivot_wider(names_from = c(strain, sample), values_from = ncells) %>%
+  mutate(name = paste(experiment, strain, sample, sep = "<br>")) %>%
+  select(-proportion, -karyo_position, -karyo_id, -experiment, -strain, -sample) %>%
+  pivot_wider(names_from = name, values_from = ncells) %>%
   pivot_longer(cols = -karyotype, values_to = "ncells") %>%
-  mutate(strain = gsub("_.*", "", name)) %>%
-  mutate(sample = gsub(".*_", "", name)) %>%
-  select(strain, sample, karyotype, ncells)
+  separate(name, into = c("experiment", "strain", "sample"), sep = "<br>")
 
 #make it pairwise
 to_plot$`10X` <- NA
 for(Strain in unique(to_plot$strain)){
   ncells_in_10X <- to_plot %>%
-    filter(strain == Strain & sample == "10X") %>%
+    filter(strain == Strain & experiment == "10X") %>%
     select(karyotype, ncells) %>%
     deframe()
   to_plot <- to_plot %>%
@@ -201,7 +188,8 @@ for(Strain in unique(to_plot$strain)){
 
 
 plot <- to_plot %>%
-  filter(sample != "10X") %>%
+  filter(experiment != "10X") %>%
+  select(-experiment) %>%
   rename(Atrandi = ncells) %>%
   pivot_longer(cols = c(Atrandi, `10X`), names_to = "experiment", values_to = "ncells") %>%
   mutate(ncells = ifelse(is.na(ncells), 0, ncells)) %>%

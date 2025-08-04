@@ -11,36 +11,23 @@ library(scales)
 source("color_palettes.R")
 
 #get inputs####
-scDNAobj_list <- readRDS("inputs/karyotyping_objects/all_cells.rds")
+all_SPCs <- readRDS("inputs/karyotyping_objects/all_SPCs.rds")
 cells_meta <- read_delim("inputs/cell_qc/cells_meta.tsv") %>%
   column_to_rownames("rowname")
-true_cells <- readRDS("inputs/karyotyping_objects/true_cells.rds")
 
+all_SPCs_meta <- lapply(all_SPCs, function(x)x$metadata$cells_meta) %>%
+  bind_rows()
 ##set base theme parameters for ggplot####
 update_geom_defaults("point", list(size = 0.5))
 
-#bind cells meta####
-
-#bind bins_meta####
-bins_meta <- list()
-for(i in c(1:length(scDNAobj_list))){
-  bins_meta[[i]] <- scDNAobj_list[[i]]$metadata$bins_meta
-  bins_meta[[i]]$sample <- unique(scDNAobj_list[[i]]$metadata$cells_meta$sample)
-}
-bins_meta <- bind_rows(bins_meta)
-
-#create tables#####
-##table summarising sequencing metrics
-cells_meta %>%
-  group_by(sample) %>%
-  summarise(n_SPCs = n(), 
-            total_count = sum(n_reads),
-            median_count_per_SPC = median(n_reads))
+#in figure 1 we split the 10X data by strain (as each strain was a different library)
+cells_meta <- cells_meta %>%
+  mutate(sample = ifelse(experiment == "10X", paste(sample, strain), sample))
 
 #plot the figures####
 ##plot placeholder for figure 1A####
 
-# Create an empty plot with text and border
+#Create an empty plot with text and border
 figure_1A <- ggplot()+
   annotate("text", x = 0.5, y = 0.5, label = "Experimental Setup\nSchematic", size = 6, hjust = 0.5)+
   theme_void()+
@@ -48,7 +35,8 @@ figure_1A <- ggplot()+
   theme(panel.border = element_rect(color = "black", fill = NA, linewidth = 1))
 
 ##plot figure 1B####
-figure_1B <- cells_meta %>%
+figure_1B <- all_SPCs_meta %>%
+  filter(experiment == "Atrandi") %>%
   ggplot(aes(x = n_reads, y = fct_rev(factor(sample)), fill = factor(sample)))+
   geom_density_ridges(alpha = 0.5)+
   scale_x_continuous(transform = "log10", breaks = c(2000, 17000, 170000, 900000))+
@@ -56,14 +44,15 @@ figure_1B <- cells_meta %>%
   scale_fill_manual(values = sample_colors)+
   labs(x = "Total reads per cell (log10 scale)", y = "Sample")+
   guides(fill = "none")+
-  theme(axis.text.x = element_text(angle = 45, hjust = 1), panel.grid.minor = element_blank())
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), 
+        panel.grid.minor = element_blank())
 
 ##plot figure 1C####
-figure_1C <- cells_meta %>%
+figure_1C <- all_SPCs_meta %>%
+  filter(experiment == "Atrandi") %>%
   group_by(sample) %>%
   arrange(desc(n_reads)) %>%
   mutate(rank = row_number()) %>%
-  mutate(sample = paste0("Sample ", sample)) %>%
   group_by(sample, cell_or_background) %>%
   mutate(last_true_cell = rank == rank[which(rank == max(rank))]) %>%
   ungroup() %>%
@@ -71,28 +60,33 @@ figure_1C <- cells_meta %>%
   mutate(label = ifelse(last_true_cell, paste0("Rank: ", rank, "\nread_count: ", n_reads), NA)) %>%
   ggplot(aes(x = rank, y = n_reads, color = cell_or_background, label = label))+
   geom_line()+
-  geom_text_repel(show.legend = FALSE, nudge_x = -0.5, nudge_y = -0.5, size = 2)+
-  scale_x_continuous(transform = "log10")+
+  geom_text_repel(show.legend = FALSE, nudge_x = -1, nudge_y = -0.5, size = 2, min.segment.length = 0)+
+  scale_x_continuous(transform = "log10", limits = c(1, NA), breaks = c(1, 10, 100, 1000))+
   scale_y_continuous(transform = "log10")+
   scale_color_manual(values = c(cell = "darkblue", backgroun = "lightgrey"))+
   guides(color = "none")+
   labs(x = "Barcode Rank (log10)", y = "Read Count (log10)")+
   facet_wrap(vars(sample), nrow = 1, scales = "free")+
-  theme_minimal()
+  theme_minimal()+
+  theme(panel.grid.minor = element_blank())
 
 ##plot figure 1D####
 #check how many cells were removed from each sample
-figure_1D <- cells_meta %>%
+figure_1D <- all_SPCs_meta  %>%
+  filter(experiment == "Atrandi") %>%
   ggplot(aes(x = factor(sample), group = cell_or_background, fill = cell_or_background, label = after_stat("count")))+
   geom_bar()+
-  labs(x = "Sample", y = "SPC Count", fill = NULL)+
+  labs(x = NULL, y = "SPC Count", fill = NULL)+
   scale_y_continuous(breaks = c(0:10)*100)+
-  scale_fill_manual(values = c(cell = "darkblue", background = "grey"))
+  scale_fill_manual(values = c(cell = "darkblue", background = "grey"))+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+#remove background cells####
+all_SPCs_meta <- filter(all_SPCs_meta, cell_or_background == "cell" & sample != "Sample 4")
 
 ##plot figure 1E####
-figure_1E <- cells_meta %>%
-  mutate(sample = paste("Sample", sample)) %>%
-  filter(cell_or_background == "cell") %>%
+figure_1E <- all_SPCs_meta  %>%
+  filter(experiment == "Atrandi") %>%
   ggplot(aes(x = n_reads, y = fraction_HU3, color = strain))+
   geom_point()+
   scale_x_continuous(labels = scientific)+
@@ -102,126 +96,40 @@ figure_1E <- cells_meta %>%
   facet_wrap(vars(sample), scales = "free_x", nrow = 1)+
   theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
 
-##plot figure 1F####
-figure_1F <- bins_meta %>%
-  select(sample, gc_content, mean_raw_counts, mean_corrected_counts) %>%
-  filter(sample != "4") %>%
-  pivot_longer(cols = c(mean_raw_counts, mean_corrected_counts), values_to = "count", names_to = "count_type") %>%
-  mutate(count_type = c(mean_raw_counts = "Raw Counts", mean_corrected_counts = "Corrected Counts")[count_type]) %>%
-  group_by(sample, count_type) %>%
-  filter(!count %in% boxplot.stats(count)$out) %>%
-  mutate(sample = paste("Sample", sample)) %>%
-  ggplot(aes(x = gc_content, y = count))+
-  geom_point()+
-  geom_smooth(method = "lm", se = FALSE, color = "blue", linewidth = 1) +  # Linear model line
-  scale_x_continuous(limits = c(0.5, 0.7))+
-  labs(x = "GC content", y = "Normalized Counts")+
-  facet_grid(rows = vars(sample), cols = vars(fct_rev(count_type)), scales = "free")
-
-##plot figure 1G####
-#compare raw vs corrected counts
-figure_1G <- bins_meta %>%
-  group_by(sample) %>%
-  mutate(bin_position = row_number()) %>%
-  filter(!is_outlier & !is_empty) %>%
-  filter(sample != "4") %>%
-  mutate(sample = paste("Sample", sample)) %>%
-  pivot_longer(cols = c("mean_raw_counts", "mean_corrected_counts"), names_to = "count_type", values_to = "count") %>%
-  group_by(sample, chromosome) %>%
-  filter(!count %in% boxplot.stats(count)) %>%
-  mutate(count_type = c(mean_raw_counts = "Raw Counts", mean_corrected_counts = "Corrected Counts")[count_type]) %>%
-  ggplot(aes(x = bin_position, y = count, color = chromosome))+
-  geom_point()+
-  #geom_boxplot(outliers = FALSE)+
-  scale_color_manual(values = rep(c("black", "orange"), times = 100))+
-  guides(color = "none")+
-  labs(x = "20 kb bin", y = "Mean count")+
-  facet_grid(cols = vars(fct_rev(count_type)), rows = vars(sample), scale = "free")
-
-##plot figure 1H#####
-##compare lorenz curves with and without GC correction
-lorenz_df <- list(raw_counts = lapply(true_cells, function(x)x$counts$raw_counts),
-                  corrected_counts = lapply(true_cells, function(x)x$counts$corrected_counts))
-
-lorenz_df <- lapply(lorenz_df, function(x){
-  x <- x %>%
-    do.call(cbind, .) %>%
-    as.data.frame() %>%
-    rownames_to_column("bin") %>%
-    pivot_longer(cols = -bin, names_to = "cell", values_to = "count") %>%
-    mutate(cell = gsub("_.*", "", cell)) %>%
-    mutate(sample = true_cells_meta[cell,]$sample) %>%
-    group_by(cell) %>%
-    arrange(count, .by_group = TRUE) %>%
-    mutate(order = row_number()) %>%
-    mutate(frac_genome = order/max(order)) %>%
-    mutate(frac_count = cumsum(count)) %>%
-    mutate(frac_count = frac_count/max(frac_count)) %>%
-    group_by(sample, frac_genome) %>%
-    summarise(mean = mean(frac_count), se = sd(frac_count)/sqrt(n()))
-    return(x)
-})
-
-lorenz_df$raw_counts$condition <- "raw"
-lorenz_df$corrected_counts$condition <- "corrected"
-lorenz_df <- bind_rows(lorenz_df)
-
-lorenz_df %>%
-  mutate(condition = fct_rev(factor(condition))) %>%
-  ggplot(aes(x = frac_genome, y = mean, color = sample))+
-  geom_line()+
-  geom_line(data = data.frame(frac_genome = c(0,1), mean = c(0,1)), color = "lightgrey", linetype = "dashed")+
-  geom_ribbon(aes(ymin = mean - se, ymax = mean + se), alpha = 0.2, color = NA)+
-  facet_wrap(vars(condition))+
-  scale_color_manual(values = sample_colors)+
-  theme_bw()
+##remove doublets####
+cells_meta <- filter(cells_meta, strain != "doublet")
 
 ##plot figure 1F####
-figure_1F <- true_cells_meta %>%
-  select(strain, sample, fraction_1, fraction_5, fraction_1_sub) %>%
+figure_1F <- cells_meta %>%
+  #filter(experiment == "Atrandi") %>%
+  select(strain, sample, fraction_1, fraction_5, fraction_1_sub, mean_coverage) %>%
   pivot_longer(cols = -c(strain, sample), names_to = "fraction") %>%
-  mutate(fraction = c(fraction_1 = "covered at least 1x", 
-                      fraction_5 = "covered at least 5x", 
-                      fraction_1_sub = "covered at least 1x\n(subsampled to 100.000 reads per cell)")[fraction]) %>%
-  mutate(fraction = factor(fraction, levels = unique(fraction)[c(1,3,2)])) %>%
+  mutate(fraction = c(mean_coverage = "Mean coverage (X)", 
+                      fraction_1 = "fraction of the genome covered at least 1x", 
+                      fraction_5 = "fraction of the genome covered at least 5x", 
+                      fraction_1_sub = "fraction of the genome covered at least 1x\n(subsampled to 100.000 reads per cell)")[fraction]) %>%
+  mutate(fraction = factor(fraction, levels = unique(fraction)[c(4,1,3,2)])) %>%
   ggplot(aes(x = sample, y = value, fill = sample))+
   geom_violin(scale = "width")+
-  geom_boxplot(fill = "white", width = 0.25)+
+  geom_boxplot(fill = "white", width = 0.25, outlier.size = 0.5)+
   scale_fill_manual(values = sample_colors)+
-  scale_x_discrete(name = NULL, breaks = NULL)+
-  scale_y_continuous(name = "Percentage of the genome")+
+  scale_x_discrete(name = NULL)+
+  scale_y_continuous(name = NULL)+
   facet_wrap(vars(fraction), nrow = 1, scales = "free")+
+  guides(fill = NULL)+
   coord_cartesian(clip = FALSE)+
-  theme_minimal()
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        panel.grid.minor = element_blank())
 
-##plot figure 1G####
-plot_list <- list()
-for(metric in c("gini", "mapd", "ICCV", "ICF_score", "mean_coverage")){
-  plot_list[[metric]] <- true_cells_meta %>%
-    mutate(plot_label = metric) %>%
-    ggplot(aes(x = factor(sample), y = .data[[metric]]))+
-    geom_violin(aes(fill = factor(sample)))+
-    geom_boxplot(width = 0.075)+
-    labs(x = NULL, y = metric)+
-    guides(fill = "none")+
-    scale_fill_manual(values = sample_colors)+
-    theme_bw()+
-    theme(panel.grid = element_blank(),
-          axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))+
-    facet_wrap(vars(plot_label))
-}
 
-#combine them
-figure_1G <- patchwork::wrap_plots(plot_list)
-
-#ccombine the figures in a single panel####
+#combine the figures in a single panel####
 top <- figure_1A + figure_1B + plot_layout(widths = c(0.875, 0.125))
 middle <- figure_1C + figure_1D + plot_layout(widths = c(0.875, 0.125))
-bottom <- figure_1F
 
 final <- (top / middle / figure_1E / figure_1F)+
   plot_annotation(tag_levels = 'A')+ 
-  plot_layout(heights = c(0.25, 0.25, 0.25, 0.25))&
+  plot_layout(heights = c(0.25, 0.20, 0.3, 0.3))&
   theme(plot.tag = element_text(size = 18, face = "bold"),
     plot.tag.position   = c(0, 1),    # top-left corner
     plot.tag.background = element_rect(fill = NA, colour = NA),
@@ -230,7 +138,7 @@ final <- (top / middle / figure_1E / figure_1F)+
 
 #save the final figure panel####
 plot_scale <- 1.8
-ggsave("figure_1.pdf", plot = final, width = 8.27 * plot_scale, height = 6 * plot_scale)
+ggsave("figure_1.pdf", plot = final, width = 8.27 * plot_scale, height = 7 * plot_scale)
 
 #open it
 if (Sys.info()["sysname"] == "Darwin") {

@@ -230,10 +230,10 @@ tag_true_cells <- function(scDNAobj, plot = TRUE, interactive_plot = TRUE, retur
     mutate(rank = row_number())
   #find elbow point of rank plot
   n_read_threshold <- find_knee(x = log10(cells_meta$rank), y = log10(cells_meta$n_reads), val_to_return = "y")
-  n_read_threshold <- 10^n_read_threshold
+  n_read_threshold <- as.integer(10^n_read_threshold)
   
   cells_meta <- cells_meta %>%
-    mutate(cell_or_background = ifelse(n_reads > n_read_threshold, "cell", "background"))
+    mutate(cell_or_background = ifelse(n_reads >= n_read_threshold, "cell", "background"))
   
   if(plot|return_obj == "plot"){
     plot <- cells_meta %>%
@@ -326,10 +326,10 @@ build_scDNAobj <- function(h5, count_matrix, cells_meta, bins_meta, transpose_co
       missing <- expected[which(!expected %in% colnames(cells_meta))]
       stop(paste("cells_meta dataframe is missing the following columns:", paste(missing, collapse = ", ")))
     }
-    expected <- c("bin", "chromosome", "start", "end", "gc_content", "mappability", "is_mappable")
+    expected <- c("bin", "chromosome", "gc_content", "mappability", "is_mappable")
     if(sum(is.na(match(expected, colnames(bins_meta)))) > 0){
       missing <- expected[which(!expected %in% colnames(bins_meta))]
-      stop(paste("bins_meta dataframe is missing the following columns:", paste(expected, collapse = ", ")))
+      stop(paste("bins_meta dataframe is missing the following columns:", paste(missing, collapse = ", ")))
     }
   }
   
@@ -874,7 +874,7 @@ summarise_karyotypes <- function(scDNAobj, ignore_outlier_cells = TRUE){
   #set the cells karyotypes to the karyo_id instead
   cells_meta$karyotype <- NA
   cells_meta[rownames(cells),]$karyotype <- cells$karyotype
-  cells_meta$karyotype <- karyo_list$karyo_id[match(cells_meta$karyotype, karyo_list$karyotype)]
+  cells_meta$karyotype <- karyo_list$karyotype[match(cells_meta$karyotype, karyo_list$karyotype)]
   
   #return the objects
   scDNAobj$karyotypes$karyo_list <- karyo_list
@@ -1629,3 +1629,40 @@ pull_and_bind <- function(list, to_pull){
    return(retrieved_data)
 }
 
+#subsample_reads
+##this function will subsample the raw count matrix to a given number of total reads. 
+subsample_reads <- function(scDNAobj, target_total){
+  counts <- scDNAobj$counts$raw_counts
+  if(min(colSums(counts)) < target_total){
+    warning("some cells have less than `target_total` counts. These cells will be skipped.")
+  }
+  counts[,] <- apply(counts, 2, function(x){
+    #deal with 0.5 values
+    if(any(x %% 1 != 0)){
+      multiplier <- 2L
+    }else{
+      multiplier <- 1L
+    }
+    x[] <- as.integer(x*multiplier)
+    target_total <- target_total*multiplier
+    total <- sum(x)
+    if(total < target_total){
+      x <- x/multiplier
+      return(x)
+    }else{
+      sampled_bins <- rep(names(x), times = x) #this creates a vector where each bin is repeated by their respecitive number of reads
+      sampled_bins <- sample(sampled_bins, size = target_total, replace = FALSE) #this will sample the bins down to the target number of reads.
+      sampled_bins <- table(factor(sampled_bins, levels = names(x))) #this will count how many times each bin was sampled. Factor preserves bins with 0 counts originally.  
+      sampled_bins <- sampled_bins/multiplier
+      return(sampled_bins)
+    }
+  })
+  scDNAobj$counts$raw_counts <- counts
+  
+  #update metadata
+  scDNAobj$metadata$bins_meta$original_mean_raw_counts <- scDNAobj$metadata$bins_meta$mean_raw_counts
+  scDNAobj$metadata$bins_meta$mean_raw_counts <- rowMeans(counts)[rownames(scDNAobj$metadata$bins_meta)]
+  scDNAobj$metadata$cells_meta$original_n_reads <- scDNAobj$metadata$cells_meta$n_reads
+  scDNAobj$metadata$cells_meta$n_reads <- colSums(counts)[rownames(scDNAobj$metadata$cells_meta)]
+  return(scDNAobj)
+}

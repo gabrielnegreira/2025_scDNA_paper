@@ -14,16 +14,16 @@ source("color_palettes.R")
 
 #get inputs####
 ## get scDNA object of true cells
-true_cells <- read_rds("inputs/true_cells.rds")
+true_cells <- read_rds("inputs/karyotyping_objects/true_cells.rds")
 
 #plot figure 5A####
 ##get PCA eigen vectors
-pca_files <- list.files("inputs", pattern = "pca.eigenvec")
+pca_files <- list.files("inputs/nucleotide_variants/", pattern = "pca.eigenvec")
 pca_data <- list()
 for(i in seq_along(pca_files)){
   Sample <-  as.integer(gsub(".*sample_(\\d+)_.*", "\\1", pca_files[[i]]))
   index = ifelse(Sample >= 5, Sample - 1, Sample)
-  pca_data[[i]] <- read_delim(paste0("inputs/", pca_files[[i]])) %>%
+  pca_data[[i]] <- read_delim(paste0("inputs/nucleotide_variants/", pca_files[[i]])) %>%
     select(-`#FID`) %>%
     rename(cell = IID) %>%
     mutate(cell = gsub("_", "", cell)) %>%
@@ -47,12 +47,12 @@ figure_5A <- pca_data %>%
 
 #plot figure 5B####
 ##get drug resistance snps
-drug_data <- read.xlsx("inputs/drug_resistance_Ldon_v2.xlsx", sheetIndex = 1)
+drug_data <- read.xlsx("inputs/nucleotide_variants/drug_resistance_Ldon_v2.xlsx", sheetIndex = 1)
 plot_list <- list()
 for(Sample in c(5, 6)){
   #get needed files
-  vcf <-  read.vcfR(paste0("inputs/sample_", Sample, ".filtered.drugs.snpeff.vcf"))
-  snpeff_data <- read.delim(paste0("inputs/sample_", Sample, ".filtered.drugs.snpeff.csv"))
+  vcf <-  read.vcfR(paste0("inputs/nucleotide_variants/sample_", Sample, ".filtered.drugs.snpeff.vcf"))
+  snpeff_data <- read.delim(paste0("inputs/nucleotide_variants/sample_", Sample, ".filtered.drugs.snpeff.csv"))
   #add the drug_data to the sneff_data
   snpeff_data <- fuzzy_inner_join(snpeff_data, drug_data,
                                   by = c("CHROM" = "chrom", "POS" = "start", "POS" = "end"),
