@@ -27,3 +27,4 @@ These are the scripts used for the paper ["A high throughput method for determin
 
 12) `generate_figures.sh`: This is a small script that runs all `Figure X.R` scripts and convert the figure panels (pdf) to png. 
 
+Order to run: `generate_karyotyping_objects.R` -> `generate_cells_metadata.R` -> `ScisTree2.py` -> `generate_figures.sh`
