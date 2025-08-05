@@ -1,5 +1,6 @@
 #import packages
 import os
+import sys
 import scistree2 as s2
 import numpy as np
 import pandas as pd
@@ -54,7 +55,7 @@ print('Likelihood of the NJ tree: ', likelihood_spr)
 imputed_tsv_file = os.path.join(out_dir, f"{infile_base}_imputed_genotype_spr.tsv")
 if os.path.exists(imputed_tsv_file):
     print(f"⚠️ Warning: Overwriting {imputed_tsv_file}")
-pd.DataFrame(imputed_genotype_spr, index=df_subset.index, columns=cell_names) \
+pd.DataFrame(imputed_genotype_spr, index=ad_df.index, columns=cell_names) \
     .to_csv(imputed_tsv_file, sep="\t")
 print(f"Wrote imputed genotype (SPR) to {imputed_tsv_file}")
 
