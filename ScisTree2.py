@@ -1,5 +1,6 @@
 #import packages
 import os
+os.environ["QT_QPA_PLATFORM"] = "offscreen" #allow Qt to use offscreen backend, so it can run in a non-GUI environment
 import sys
 import scistree2 as s2
 import numpy as np
@@ -48,7 +49,7 @@ ad_array = np.array(ad_df.to_numpy().tolist(), dtype=int)
 prob = s2.probability.from_reads(ad_array, ado=0.2, seqerr=0.01, posterior=True, af=None, cell_names=cell_names, site_names=site_names)
 
 # SPR local search
-caller_spr = s2.ScisTree2(threads=8, max_iter=100000000)
+caller_spr = s2.ScisTree2(threads=64, max_iter=100000000)
 imputed_genotype_spr, tree_spr, likelihood_spr = caller_spr.infer(prob)
 
 print('Likelihood of the SPR tree: ', likelihood_spr)
