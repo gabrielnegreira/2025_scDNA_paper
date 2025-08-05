@@ -1,1 +1,16 @@
 Processing file: /scratch/antwerpen/205/vsc20542/atrandi_paper/inputs/nucleotide_variants/sample_1_HU3_ad_matrix_for_scistree2.tsv
+                                   TATCCGGTGTCTGCTAGTGTGATGCGGTTGAT_2  ... ATATGCGGAGATGGTCTACAACCGCGGTTGAT_1
+CAACTTGCGATACCGACACCATCTGTCCGATT_2                                     ...                                   
+0,5                                                            (0, 3)  ...                             (2, 0)
+0,8                                                            (0, 4)  ...                             (0, 0)
+5,0                                                            (1, 0)  ...                             (2, 0)
+0,3                                                            (0, 7)  ...                             (0, 0)
+8,0                                                            (0, 0)  ...                             (0, 0)
+
+[5 rows x 70 columns]
+<class 'pandas.core.frame.DataFrame'>
+Likelihood of the SPR tree:  -1036850.0
+Wrote genotype probabilities to inputs/trees/sample_1_HU3_ad_matrix_for_scistree2_genotype_probabilities.tsv
+Wrote imputed genotype to inputs/trees/sample_1_HU3_ad_matrix_for_scistree2_imputed_genotype.tsv
+Wrote Newick to inputs/trees/sample_1_HU3_ad_matrix_for_scistree2_inferred_tree.nwk
+Wrote tree figure to inputs/trees/sample_1_HU3_ad_matrix_for_scistree2_inferred_tree.png
