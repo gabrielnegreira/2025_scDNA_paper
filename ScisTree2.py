@@ -1,8 +1,8 @@
 #import packages
-import scistree2 as s2 
-import numpy as np 
+import os
+import scistree2 as s2
+import numpy as np
 import pandas as pd
-import os 
 from ete3 import Tree, TreeStyle
 
 #set output dir
@@ -10,18 +10,12 @@ out_dir = "inputs/trees"
 os.makedirs(out_dir, exist_ok=True)
 
 #get inputs
-af_mat = "inputs/nucleotide_variants/sample_2_ad_matrix_formated.tsv"
-df = pd.read_csv(af_mat, sep="\t")
+#af_mat = "inputs/nucleotide_variants/sample_6_both_ad_matrix_for_scistree2.tsv"
+af_mat = sys.argv[1] #this will get the file for the matrix as the first argument in the command-line call.
+df = pd.read_csv(af_mat, sep="\t", index_col=0) #read it as a pandas dataframe with row names specified in the first column.
 
 #get the name of the input file (needed for naming outputs)
 infile_base = os.path.splitext(os.path.basename(af_mat))[0]
-
-# make a new index by pasting chromosome + "_" + position
-df.index = df["chromosome"].astype(str) + "_" + df["position"].astype(str)
-# drop the now–redundant columns
-df = df.drop(columns=["chromosome", "position"])
-#drop columns with only NA values (issue with tsv format)
-df = df.dropna(axis=1, how='all')
 
 #Define a parser that turns "ref,alt" → (int, int), and handles "NA"
 def parse_pair(s):
@@ -30,59 +24,54 @@ def parse_pair(s):
     ref, alt = s.split(",")
     return (int(ref), int(alt))
 
-#Apply the `parse_pair` function element‐wise (this converts the ad matrix to the expected format by scistree2)
+#Apply the `parse_pair` function element‐wise 
+#(this converts the ad matrix to the expected format by scistree2)
 ad_df = df.map(parse_pair)
 
-#subset it for testing
-df_subset = ad_df.sample(n = 10000)
-
 #check the object
-print(df_subset.head)
+print(ad_df.head())
 
-ad_array = np.array(
-    [[[*t] for t in row] for row in df_subset.values],
-    dtype=int
-) 
+#get cell and site names
+cell_names = list(ad_df.columns)
+site_names = list(ad_df.index)
 
-#calculate probabilities
-prob = s2.probability.genotype_probability(ad_array, ado=0.2, seqerr=0.01, posterior=True, af=None)
+#convert it to the expected format ("A three-dimensional NumPy 
+#array containing the read counts for each cell at each site")
+ad_array = np.array(ad_df.to_numpy().tolist(), dtype=int)
 
-#construct trees with different methods
+print(ad_array.shape)
+
+#Convert counts to `scistree.probability.GenotypeProbability` object.
+prob = s2.probability.from_reads(ad_array, ado=0.2, seqerr=0.01, posterior=True, af=None, cell_names=cell_names, site_names=site_names)
 
 # SPR local search
 caller_spr = s2.ScisTree2(threads=8, max_iter=10000)
 imputed_genotype_spr, tree_spr, likelihood_spr = caller_spr.infer(prob)
 
-print('Imputed genotype from SPR: \n', imputed_genotype_spr)
-print('Newick of the SPR tree: ', tree_spr)
 print('Likelihood of the NJ tree: ', likelihood_spr)
 
-#export the tree plots
-ts = TreeStyle()
-ts.show_leaf_name   = True   # display cell names at the tips
-ts.show_branch_length = True # show branch lengths if you want
-ts.scale =  120             # tweak to control the scale bar length
+# 1) Export the imputed genotype matrix as TSV
+imputed_tsv_file = os.path.join(out_dir, f"{infile_base}_imputed_genotype_spr.tsv")
+if os.path.exists(imputed_tsv_file):
+    print(f"⚠️ Warning: Overwriting {imputed_tsv_file}")
+pd.DataFrame(imputed_genotype_spr, index=df_subset.index, columns=cell_names) \
+    .to_csv(imputed_tsv_file, sep="\t")
+print(f"Wrote imputed genotype (SPR) to {imputed_tsv_file}")
 
-out_dir = "inputs/trees"
-os.makedirs(out_dir, exist_ok=True)
+# 2) Export the Newick tree file
+newick_file = os.path.join(out_dir, f"{infile_base}_inferred_tree_spr.nwk")
+with open(newick_file, "w") as fh:
+    fh.write(tree_spr.rstrip().rstrip(";") + ";\n")
+print(f"Wrote Newick (SPR) to {newick_file}")
 
-# export the tree plot
-from ete3 import Tree, TreeStyle
+# 3) Export a PNG image of the tree
 ts = TreeStyle()
-ts.show_leaf_name = True
+ts.show_leaf_name = True   # display cell names
 ts.show_branch_length = True
 ts.scale = 120
 
-#export the tree file
-fn = f"{infile_base}_inferred_tree_spr.nwk"
-out_file = os.path.join(out_dir, fn)
-with open(out_file, "w") as fh:
-    fh.write(newick.rstrip().rstrip(";") + ";\n")
-print(f"Wrote Newick (SPR) to {out_file}")
-
-#export the tree plot
 tree_obj = Tree(tree_spr)
-img_fn = f"{infile_base}_inferred_tree_spr.png"
-img_file = os.path.join(out_dir, img_fn)
-tree_obj.render(img_file, tree_style=ts, w=800, h=600)
-print(f"Wrote figure (SPR) to {img_file}")
+png_file = os.path.join(out_dir, f"{infile_base}_inferred_tree_spr.png")
+tree_obj.render(png_file, tree_style=ts, w=800, h=600)
+print(f"Wrote tree figure (SPR) to {png_file}")
+
