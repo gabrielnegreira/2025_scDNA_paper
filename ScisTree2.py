@@ -29,8 +29,12 @@ def parse_pair(s):
 #(this converts the ad matrix to the expected format by scistree2)
 ad_df = df.map(parse_pair)
 
+#subsample the matrix (to make it run faster, remove later)
+ad_df = ad_df.sample(n = 1000)
+
 #check the object
 print(ad_df.head())
+print(type(ad_df))
 
 #get cell and site names
 cell_names = list(ad_df.columns)
@@ -40,39 +44,41 @@ site_names = list(ad_df.index)
 #array containing the read counts for each cell at each site")
 ad_array = np.array(ad_df.to_numpy().tolist(), dtype=int)
 
-print(ad_array.shape)
-
 #Convert counts to `scistree.probability.GenotypeProbability` object.
 prob = s2.probability.from_reads(ad_array, ado=0.2, seqerr=0.01, posterior=True, af=None, cell_names=cell_names, site_names=site_names)
 
 # SPR local search
-caller_spr = s2.ScisTree2(threads=8, max_iter=10000)
+caller_spr = s2.ScisTree2(threads=8, max_iter=100000000)
 imputed_genotype_spr, tree_spr, likelihood_spr = caller_spr.infer(prob)
 
-print('Likelihood of the NJ tree: ', likelihood_spr)
+print('Likelihood of the SPR tree: ', likelihood_spr)
 
-# 1) Export the imputed genotype matrix as TSV
-imputed_tsv_file = os.path.join(out_dir, f"{infile_base}_imputed_genotype_spr.tsv")
-if os.path.exists(imputed_tsv_file):
-    print(f"⚠️ Warning: Overwriting {imputed_tsv_file}")
-pd.DataFrame(imputed_genotype_spr, index=ad_df.index, columns=cell_names) \
+# 1) Export the probability matrix as TSV
+prob_tsv_file = os.path.join(out_dir, f"{infile_base}_genotype_probabilities.tsv")
+prob_matrix = np.array(prob.probs, dtype=float)
+pd.DataFrame(prob_matrix, index=prob.site_names, columns=prob.cell_names) \
+    .to_csv(prob_tsv_file, sep="\t")
+print(f"Wrote genotype probabilities to {prob_tsv_file}")
+
+# Export the imputed genotype matrix as TSV
+imputed_tsv_file = os.path.join(out_dir, f"{infile_base}_imputed_genotype.tsv")
+pd.DataFrame(imputed_genotype_spr, index=site_names, columns=cell_names) \
     .to_csv(imputed_tsv_file, sep="\t")
-print(f"Wrote imputed genotype (SPR) to {imputed_tsv_file}")
+print(f"Wrote imputed genotype to {imputed_tsv_file}")
 
-# 2) Export the Newick tree file
-newick_file = os.path.join(out_dir, f"{infile_base}_inferred_tree_spr.nwk")
+# Export the Newick tree file
+newick_file = os.path.join(out_dir, f"{infile_base}_inferred_tree.nwk")
 with open(newick_file, "w") as fh:
     fh.write(tree_spr.rstrip().rstrip(";") + ";\n")
-print(f"Wrote Newick (SPR) to {newick_file}")
+print(f"Wrote Newick to {newick_file}")
 
-# 3) Export a PNG image of the tree
+# Export a PNG image of the tree
 ts = TreeStyle()
 ts.show_leaf_name = True   # display cell names
 ts.show_branch_length = True
 ts.scale = 120
 
 tree_obj = Tree(tree_spr)
-png_file = os.path.join(out_dir, f"{infile_base}_inferred_tree_spr.png")
+png_file = os.path.join(out_dir, f"{infile_base}_inferred_tree.png")
 tree_obj.render(png_file, tree_style=ts, w=800, h=600)
-print(f"Wrote tree figure (SPR) to {png_file}")
-
+print(f"Wrote tree figure to {png_file}")

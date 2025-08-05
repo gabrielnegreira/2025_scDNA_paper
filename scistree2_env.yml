@@ -1,0 +1,13 @@
+name: scistree2
+channels:
+    - bioconda
+    - conda-forge
+dependencies:
+    - python=3.11
+    - pandas
+    - numpy
+    - tree
+    - os
+    - sys
+    - ete3
+    - PyQt5
