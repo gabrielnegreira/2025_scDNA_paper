@@ -102,6 +102,8 @@ for(i in seq_along(matrices)){
     
     #export the matrix
     file_name <- paste0(mat_sample, "_", Strain, "_ad_matrix_for_scistree2.tsv")
-    write_tsv(mat, file = paste0("inputs/nucleotide_variants/", file_name)) 
+    mat %>%
+      rownames_to_column(var = "site") %>%
+      write_tsv(file = paste0("inputs/nucleotide_variants/", file_name), col_names = TRUE) 
   }
 }
