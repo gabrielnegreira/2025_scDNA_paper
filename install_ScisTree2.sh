@@ -32,3 +32,5 @@ conda activate scistree2
 #install it
 pip install --upgrade pip
 pip install .
+pip install ete3 PyQt5
+
