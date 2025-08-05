@@ -14,3 +14,5 @@
 *.eigenvec
 *.vcf
 *.nwk
+*scistree.out
+logs/

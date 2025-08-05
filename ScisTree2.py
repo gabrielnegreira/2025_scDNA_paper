@@ -31,7 +31,7 @@ def parse_pair(s):
 ad_df = df.map(parse_pair)
 
 #subsample the matrix (to make it run faster, remove later)
-ad_df = ad_df.sample(n = 1000)
+#ad_df = ad_df.sample(n = 1000)
 
 #check the object
 print(ad_df.head())
@@ -77,9 +77,9 @@ print(f"Wrote Newick to {newick_file}")
 ts = TreeStyle()
 ts.show_leaf_name = True   # display cell names
 ts.show_branch_length = True
-ts.scale = 120
+ts.scale = 240
 
 tree_obj = Tree(tree_spr)
 png_file = os.path.join(out_dir, f"{infile_base}_inferred_tree.png")
-tree_obj.render(png_file, tree_style=ts, w=800, h=600)
+tree_obj.render(png_file, tree_style=ts, w=1600, h=1200)
 print(f"Wrote tree figure to {png_file}")
