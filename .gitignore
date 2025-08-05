@@ -5,4 +5,12 @@
 .Ruserdata
 *.png
 *.pdf
-inputs/
+*.tsv
+*.h5
+*.rds
+*.xlsx
+*.txt
+*.csv
+*.eigenvec
+*.vcf
+*.nwk
