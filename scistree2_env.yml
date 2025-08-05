@@ -7,7 +7,5 @@ dependencies:
     - pandas
     - numpy
     - tree
-    - os
-    - sys
     - ete3
-    - PyQt5
+    - pyqt=5
