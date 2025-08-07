@@ -77,9 +77,9 @@ print(f"Wrote Newick to {newick_file}")
 ts = TreeStyle()
 ts.show_leaf_name = True   # display cell names
 ts.show_branch_length = True
-ts.scale = 240
+ts.scale = 480
 
 tree_obj = Tree(tree_spr)
 png_file = os.path.join(out_dir, f"{infile_base}_inferred_tree.png")
-tree_obj.render(png_file, tree_style=ts, w=1600, h=1200)
+tree_obj.render(png_file, tree_style=ts, w=3200, h=2400)
 print(f"Wrote tree figure to {png_file}")
