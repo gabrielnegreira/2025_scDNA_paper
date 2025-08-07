@@ -59,7 +59,8 @@ for(Sample in c("Sample 2", "Sample 6")){
     scale_x_continuous(name = "Raw Somies", breaks = c(1:100))
   
   #plot core heatmap
-  hm_plot <- ggheatmap(matrix_to_plot) + #start the heatmap
+  hm_plot <- ggheatmap(matrix_to_plot, filling = NULL) + #start the heatmap
+    geom_tile(aes(fill = value))+
     scale_fill_gradientn(name = "Raw Somies", colors = color_palette, breaks = breaks, limits = c(0, max(breaks))) + #set the fill scale
     scale_x_discrete(labels = NULL, breaks = NULL)+ #remmoves cell labels
     anno_left(size = 0)+ #create an empty left annotation(needed for the next step)

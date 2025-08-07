@@ -86,7 +86,7 @@ for(i in seq_along(matrices)){
     #get the top 1000 loci for each chromosome
     rows <- af_counts %>%
       group_by(chromosome) %>%
-      slice_max(n = 1000, order_by = total_counts) %>%
+      #slice_max(n = 1000, order_by = total_counts) %>%
       pull("row")
     
     #subset the matrix
