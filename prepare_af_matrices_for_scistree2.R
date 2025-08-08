@@ -8,6 +8,10 @@ gc()
 library(tidyverse)
 library(readr)
 library(UpSetR)
+library(furrr)
+
+# pick a sensible number of workers
+plan(multisession, workers = parallel::detectCores() - 1)
 
 #get the data
 matrices <- list.files("inputs/nucleotide_variants/", pattern = "ad_matrix.tsv")
@@ -21,18 +25,17 @@ cells_meta <- read_delim("inputs/cell_qc/cells_meta.tsv") %>%
   mutate(sample = gsub(" ", "_", sample)) %>%
   mutate(simple_barcode = gsub("_.*", "", cell))
 
-
-for(i in seq_along(matrices)){
+#create a function to process the matrices so it can run in parallel
+process_one_matrix <- function(mfile) {
   #get matrix
-  original_mat <- read_tsv(paste0("inputs/nucleotide_variants/", matrices[i]))
-
-  #remove last column containing only NA values (issue with tsv file)
-  cols_to_remove <- apply(original_mat, 2, function(x) all(is.na(x)))
-  cols_to_keep <- which(!cols_to_remove)
-  original_mat <- original_mat[,cols_to_keep]
+  original_mat <- readr::read_tsv(file.path("inputs/nucleotide_variants", mfile), show_col_types = FALSE)
+  
+  # drop all-NA columns
+  keep <- !apply(original_mat, 2, function(x) all(is.na(x)))
+  original_mat <- original_mat[, keep, drop = FALSE]
   
   #specify to which sample this matrix comes from 
-  mat_sample <- gsub("_ad_matrix.*", "", matrices[i])
+  mat_sample <- gsub("_ad_matrix.*", "", mfile)
   
   #create a key name pair for the correct barcodes
   correct_barcodes <- cells_meta %>%
@@ -40,12 +43,9 @@ for(i in seq_along(matrices)){
     select(simple_barcode, cell) %>%
     deframe()
   
-  #check if the colnames match the names in the cells_meta
-  # upset(fromList(list(cells_meta = names(correct_barcodes),
-  #                     colnames = colnames(original_mat[,3:ncol(original_mat)]))))
-  
   #keep only cells found in the cells_meta
-  original_mat <- original_mat[,which(colnames(original_mat) %in% c("chromosome", "position", names(correct_barcodes)))]
+  keep_cols <- colnames(original_mat) %in% c("chromosome", "position", names(correct_barcodes))
+  original_mat <- original_mat[, keep_cols, drop = FALSE]
   
   #correct colnames
   colnames(original_mat)[3:ncol(original_mat)] <- correct_barcodes[colnames(original_mat)[3:ncol(original_mat)]]
@@ -67,22 +67,19 @@ for(i in seq_along(matrices)){
     
     #convert the matrix to a proportion matrix
     prop_mat <- mat
-    prop_mat[,3:ncol(mat)] <- apply(prop_mat[,3:ncol(prop_mat)], 2, function(x){
-      x <- sapply(x, function(y){
-        y <- strsplit(y, split = ",")
-        y <- unlist(y)
-        y <- as.integer(y)
-        y <- y[2]/sum(y)
-        return(y)
-      })
-    })
+    prop_mat[, 3:ncol(prop_mat)] <- lapply(prop_mat[, 3:ncol(prop_mat)], function(col) {
+      sp <- strsplit(col, ",", fixed = TRUE)
+      ref <- vapply(sp, function(z) as.integer(z[[1]]), integer(1L))
+      alt <- vapply(sp, function(z) as.integer(z[[2]]), integer(1L))
+      alt / (ref + alt)
+    }) 
     
     #remove unvariable loci
     unvar_loci <- rowMeans(prop_mat[,3:ncol(prop_mat)], na.rm = TRUE)
     unvar_loci <- which(is.na(unvar_loci) | unvar_loci %in% c(0,1))
     mat <- mat[-unvar_loci,]
     
-    #convert it to a matrix
+    #convert it to a matrix-like dataframe
     r_names <- paste(mat$chromosome, mat$position, sep = "_")
     mat <- mat[,c(3:ncol(mat))]
     mat <- as.data.frame(mat)
@@ -96,3 +93,7 @@ for(i in seq_along(matrices)){
       write_tsv(file = paste0("inputs/nucleotide_variants/", file_name), col_names = TRUE) 
   }
 }
+
+
+# PARALLEL over files
+furrr::future_map(matrices, process_one_matrix, .progress = TRUE)
