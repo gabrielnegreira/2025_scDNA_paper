@@ -5,7 +5,7 @@ import sys
 import scistree2 as s2
 import numpy as np
 import pandas as pd
-from ete3 import Tree, TreeStyle
+from ete3 import Tree, TreeStyle, faces, AttrFace, TextFace
 
 #set output dir
 out_dir = "inputs/trees"
@@ -49,10 +49,11 @@ ad_array = np.array(ad_df.to_numpy().tolist(), dtype=int)
 prob = s2.probability.from_reads(ad_array, ado=0.2, seqerr=0.01, posterior=True, af=None, cell_names=cell_names, site_names=site_names)
 
 # SPR local search
-caller_spr = s2.ScisTree2(threads=64, max_iter=100000000)
-imputed_genotype_spr, tree_spr, likelihood_spr = caller_spr.infer(prob)
+caller_spr = s2.ScisTree2(threads=64, max_iter=1000)
+tree_spr, imputed_genotype_spr, likelihood_spr = caller_spr.infer(prob)
 
 print('Likelihood of the SPR tree: ', likelihood_spr)
+print(type(tree_spr))
 
 # 1) Export the probability matrix as TSV
 prob_tsv_file = os.path.join(out_dir, f"{infile_base}_genotype_probabilities.tsv")
@@ -68,18 +69,45 @@ pd.DataFrame(imputed_genotype_spr, index=site_names, columns=cell_names) \
 print(f"Wrote imputed genotype to {imputed_tsv_file}")
 
 # Export the Newick tree file
+## define a function to retrieve the number of mutations in each branch
+def get_num_mutations(node):
+    return len(node.mutations)
+
+nwk_tree = tree_spr.output(branch_length_func=get_num_mutations)
+
 newick_file = os.path.join(out_dir, f"{infile_base}_inferred_tree.nwk")
+#tree_obj.write(format=1, outfile=newick_file)
 with open(newick_file, "w") as fh:
-    fh.write(tree_spr.rstrip().rstrip(";") + ";\n")
+    fh.write(nwk_tree)
+
 print(f"Wrote Newick to {newick_file}")
 
-# Export a PNG image of the tree
-ts = TreeStyle()
-ts.show_leaf_name = True   # display cell names
-ts.show_branch_length = True
-ts.scale = 480
+# Parse the Newick string; format=1 understands branch lengths
+t = Tree(nwk_tree, format=1)
 
-tree_obj = Tree(tree_spr)
+# Optional: custom layout to show leaf names clearly (good for long labels)
+def layout(node):
+    if node.is_leaf():
+        faces.add_face_to_node(TextFace(node.name, fsize=10), node, column=0, position="aligned")
+    # show branch length (mut count) as small label on edges
+    if not node.is_root() and node.dist is not None:
+        faces.add_face_to_node(TextFace(f"{node.dist:.0f}", fsize=8), node, column=1, position="branch-top")
+
+ts = TreeStyle()
+ts.mode = "r"                   # "r" = rectangular; try "c" for circular
+ts.show_leaf_name = False       # we draw names via layout() for better control
+ts.show_branch_length = False   # we add our own labels above
+ts.show_scale = False
+ts.layout_fn = layout
+ts.branch_vertical_margin = 12  # more space between leaves
+ts.scale = 480                  # overall scaling of the drawing
+
+# Output files
 png_file = os.path.join(out_dir, f"{infile_base}_inferred_tree.png")
-tree_obj.render(png_file, tree_style=ts, w=3200, h=2400)
-print(f"Wrote tree figure to {png_file}")
+svg_file = os.path.join(out_dir, f"{infile_base}_inferred_tree.svg")
+
+t.render(png_file, tree_style=ts, w=3200, h=2400, units="px")
+print(f"Wrote tree PNG to {png_file}")
+
+t.render(svg_file, tree_style=ts)  # SVG is resolution-independent
+print(f"Wrote tree SVG to {svg_file}")
