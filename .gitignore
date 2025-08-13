@@ -16,3 +16,4 @@
 *.nwk
 *scistree.out
 logs/
+*temp*

@@ -65,33 +65,22 @@ for(i in seq_along(matrices)){
       mat <- original_mat
     }
     
-    #convert the matrix to a count matrix
-    count_mat <- mat
-    count_mat[,3:ncol(mat)] <- apply(count_mat[,3:ncol(count_mat)], 2, function(x){
+    #convert the matrix to a proportion matrix
+    prop_mat <- mat
+    prop_mat[,3:ncol(mat)] <- apply(prop_mat[,3:ncol(prop_mat)], 2, function(x){
       x <- sapply(x, function(y){
         y <- strsplit(y, split = ",")
         y <- unlist(y)
         y <- as.integer(y)
-        y <- sum(y, na.rm = TRUE)
+        y <- y[2]/sum(y)
         return(y)
       })
     })
     
-    #now count how many counts each bin had and save it in a dataframe
-    af_counts <- data.frame(chromosome = count_mat$chromosome, 
-                            position = count_mat$position, 
-                            total_counts = (rowSums(count_mat[,3:ncol(count_mat)])), 
-                            row = rownames(count_mat))
-    rm(count_mat)
-    #get the top 1000 loci for each chromosome
-    rows <- af_counts %>%
-      group_by(chromosome) %>%
-      slice_max(n = 1000, order_by = total_counts) %>%
-      pull("row")
-    
-    #subset the matrix
-    mat <- mat[rows,]
-    rm(rows)
+    #remove unvariable loci
+    unvar_loci <- rowMeans(prop_mat[,3:ncol(prop_mat)], na.rm = TRUE)
+    unvar_loci <- which(is.na(unvar_loci) | unvar_loci %in% c(0,1))
+    mat <- mat[-unvar_loci,]
     
     #convert it to a matrix
     r_names <- paste(mat$chromosome, mat$position, sep = "_")
