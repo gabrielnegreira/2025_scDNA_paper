@@ -3,11 +3,12 @@ rm(list = ls(envir = parent.frame()))
 gc()
 
 #load libraries####
+source("scDNA_functions_S3.R")
+source("color_palettes.R")
 library(tidyverse)
 library(ggridges)
 library(ggrepel)
 library(ggalluvial)
-library(patchwork)
 library(ggalign)
 library(igraph)
 library(ggraph)
@@ -16,8 +17,6 @@ library(GGally)
 library(ape)
 library(pegas)
 library(visNetwork)
-source("scDNA_functions_S3.R")
-source("color_palettes.R")
 
 #get inputs####
 true_cells <- readRDS("inputs/karyotyping_objects/true_cells.rds")
@@ -163,10 +162,10 @@ for(Strain in c("BPK081", "HU3")){
           strip.clip = "off", 
           panel.spacing = unit(10, "pt"))
   
-  plot_list[[Strain]] <- align_plots(bar_plot, heat_map, ncol = 1, heights = c(0.2, 0.8), guides = "r")
+  plot_list[[Strain]] <- ggalign::align_plots(bar_plot, heat_map, ncol = 1, heights = c(0.2, 0.8), guides = "r") + layout_tags(NULL)
 }
 
-figure_3B <- ggalign::align_plots(!!!plot_list, guides = "r")
+figure_3B <- ggalign::align_plots(!!!plot_list, guides = "r", )
 
 ##plot figure 3C####
 to_plot <- to_plot %>%
@@ -329,13 +328,10 @@ for(strain_to_plot in c("BPK081", "HU3")){
     theme(plot.title = element_text(hjust = 0.5, face = "bold"))
 }
 
-figure_3D <- cowplot::plot_grid(plotlist = net_plot_list, nrow = 1)
+figure_3D <- ggalign::align_plots(!!!net_plot_list, nrow = 1) + layout_tags(NULL)
 
-
-#since the heatmaps generated with ggalign are not compatible with patchwork, I have to use ggalign to align them to them
-#however it does not allow adding the A/B tags, so I had to do it manually.
-final <- align_plots(figure_3A, NULL, figure_3B, NULL, figure_3C, ncol = 1, heights = c(0.4, 0.025, 0.4, 0.025, 0.15))
-
+final <- ggalign::align_plots(figure_3A, NULL, figure_3B, NULL, figure_3C, ncol = 1, heights = c(0.4, 0.025, 0.4, 0.025, 0.15))
+final <- final + layout_tags("A")
 #save the final figure panel####
 plot_scale <- 1.8
 ggsave("figure_3.pdf", plot = final, width = 8.27 * plot_scale, height = 11 * plot_scale)

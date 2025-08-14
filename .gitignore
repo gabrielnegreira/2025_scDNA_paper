@@ -4,6 +4,7 @@
 .RData*
 .Ruserdata
 *.png
+*.svg
 *.pdf
 *.tsv
 *.h5

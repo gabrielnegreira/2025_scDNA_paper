@@ -8,6 +8,7 @@ library(patchwork)
 library(vcfR)
 library(xlsx)
 library(fuzzyjoin)
+library(ggtree)
 library(ggalign)
 source("color_palettes.R")
 
@@ -15,6 +16,11 @@ source("color_palettes.R")
 #get inputs####
 ## get scDNA object of true cells
 true_cells <- read_rds("inputs/karyotyping_objects/true_cells.rds")
+
+#get cells metadata
+cells_meta <- read_delim("inputs/cell_qc/cells_meta.tsv") %>%
+  column_to_rownames("rowname") %>%
+  filter(cell_or_background == "cell" & strain != "doublet" & sample != "Sample 4")
 
 #plot figure 5A####
 ##get PCA eigen vectors
@@ -44,8 +50,46 @@ figure_5A <- pca_data %>%
   scale_color_manual(values = c(strain_colors, doublet = "grey"))+
   theme_bw()
 
-
 #plot figure 5B####
+##get the trees
+file_names <- list.files(path = "inputs/trees", pattern = ".*both.*.nwk")
+trees <- paste0("inputs/trees/", file_names)
+trees <- lapply(trees, read.tree)
+names <- 
+names(trees) <- file_names
+
+plot_list <- list()
+for(file in names(trees)){
+  tree <- trees[[file]]
+  p <- ggtree(tree, layout = "ellipse")
+  p$data <- cbind(p$data, cells_meta[p$data$label,])
+  plot_list[[file]] <- p + 
+    geom_tippoint(aes(color = strain)) + 
+    geom_rootpoint(color = "black") +
+    scale_x_continuous(transform = "sqrt")+
+    scale_color_manual(values = strain_colors) 
+}
+
+#quick: test different layouts
+# layouts <- c('rectangular', 'dendrogram', 'slanted', 'ellipse', 'roundrect', 'fan', 'circular', 'inward_circular', 'radial', 'equal_angle', 'daylight', 'ape')
+# plot_list <- list()
+# for(lay in layouts){
+#   tree <- trees[[1]]
+#   #tree$edge.length <- NULL
+#   #tree$edge.length <- rep(1, times = nrow(tree$edge))
+#   p <- ggtree(tree, layout = lay)
+#   p$data <- cbind(p$data, cells_meta[p$data$label,])
+#   plot_list[[lay]] <- p + 
+#     geom_tippoint(aes(color = strain)) + 
+#     geom_rootpoint(color = "black") +
+#     scale_color_manual(values = strain_colors) + 
+#     ggtitle(lay)
+# }
+
+
+ggalign::align_plots(!!!plot_list, guides = "r")
+
+
 ##get drug resistance snps
 drug_data <- read.xlsx("inputs/nucleotide_variants/drug_resistance_Ldon_v2.xlsx", sheetIndex = 1)
 plot_list <- list()
