@@ -41,7 +41,7 @@ create_colors <-function(x,
                                      "green mint", "ice cube", "blue ocean", "indigo night", "purple wine"), 
                          seed.use = 123){
   #get required libraries  
-  check_required_packages("hues")
+  require("hues")
   #test inputs
   palette <- match.arg(palette)
   #create pallete parameters
