@@ -86,6 +86,11 @@ process_one_matrix <- function(mfile) {
     mat <- mat[-unvar_loci,]
     prop_mat <- prop_mat[-unvar_loci,]
     
+    #remove loci where alternative allele is found in only 1 cells
+    loci <- rowSums(prop_mat[,3:ncol(prop_mat)] > 0, na.rm = TRUE) 
+    loci <- which(loci > 1)
+    mat <- mat[loci,]
+    prop_mat <- prop_mat[loci,]
     #remove rows with too name NA values
     NA_to_remove <- data.frame(row = rownames(prop_mat),
                                position = prop_mat$position, 
