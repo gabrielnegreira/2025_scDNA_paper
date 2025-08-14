@@ -134,7 +134,7 @@ callr::r(function() {
     final <- ggalign::align_plots(top, middle, !!!figures[c("E", "F")], ncol = 1)
     
     #add layout tags
-    final <- final + layout_tags("A")
+    final <- final + layout_tags("A") & theme(plot.tag = element_text(size = 16))
     
     #save the final figure panel####
     plot_scale <- 1.8
