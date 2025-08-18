@@ -30,7 +30,7 @@ cells_meta <- read_delim("inputs/cell_qc/cells_meta.tsv") %>%
 #create a function to process the matrices so it can run in parallel
 process_one_matrix <- function(mfile) {
   #get matrix
-  original_mat <- vroom::vroom(file.path("inputs/nucleotide_variants", mfile), show_col_types = FALSE)
+  original_mat <- vroom::vroom(file.path("inputs/nucleotide_variants", mfile), show_col_types = FALSE, col_types = cols(.default = col_character()))
   
   # drop all-NA columns
   keep <- !apply(original_mat, 2, function(x) all(is.na(x)))
@@ -77,7 +77,8 @@ process_one_matrix <- function(mfile) {
       sp <- strsplit(col, ",", fixed = TRUE)
       ref <- vapply(sp, function(z) as.integer(z[[1]]), integer(1L))
       alt <- vapply(sp, function(z) as.integer(z[[2]]), integer(1L))
-      alt / (ref + alt)
+      af <- alt / (ref + alt)
+      return(af)
     }) 
     
     #remove unvariable loci
@@ -91,6 +92,18 @@ process_one_matrix <- function(mfile) {
     loci <- which(loci > 1)
     mat <- mat[loci,]
     prop_mat <- prop_mat[loci,]
+    
+    #replace heterozygous loci with by reference
+    mat[, 3:ncol(mat)] <- lapply(mat[, 3:ncol(prop_mat)], function(col) {
+      sp <- strsplit(col, ",", fixed = TRUE)
+      ref <- vapply(sp, function(z) as.integer(z[[1]]), integer(1L))
+      alt <- vapply(sp, function(z) as.integer(z[[2]]), integer(1L))
+      ref <- ifelse(alt > 0 & ref > 0, alt + ref, ref)
+      alt <- ifelse(alt > 0 & ref > 0, 0, alt)
+      col <- paste(ref, alt, sep = ",")
+      return(col)
+    }) 
+    
     #remove rows with too name NA values
     NA_to_remove <- data.frame(row = rownames(prop_mat),
                                position = prop_mat$position, 
