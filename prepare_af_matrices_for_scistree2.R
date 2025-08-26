@@ -98,8 +98,17 @@ process_one_matrix <- function(mfile) {
       sp <- strsplit(col, ",", fixed = TRUE)
       ref <- vapply(sp, function(z) as.integer(z[[1]]), integer(1L))
       alt <- vapply(sp, function(z) as.integer(z[[2]]), integer(1L))
-      ref <- ifelse(alt > 0 & ref > 0, alt + ref, ref)
+      
+      #convert heterozygous loci to homozygous reference
+      ref <- ifelse(alt > 0 & ref > 0, alt + ref, ref) 
       alt <- ifelse(alt > 0 & ref > 0, 0, alt)
+      
+      #if loci with homozygous alternative has only one read, assume that is a mistake and replace by reference instead
+      alt_2 <- ifelse(alt == 1 & ref == 0, 0, alt)
+      ref <- ifelse(alt == 1 & ref == 0, 1, ref)
+      alt <- alt_2
+      rm(alt_2)
+      #paste it back
       col <- paste(ref, alt, sep = ",")
       return(col)
     }) 
