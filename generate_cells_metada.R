@@ -26,29 +26,43 @@ qc_files <- lapply(qc_files, read.csv, header = FALSE)
 names(qc_files) <- names
 rm(names)
 
-#fix the column names in the qc files
-qc_files[grep("coverages_combined.csv", names(qc_files))] <- lapply(qc_files[grep("coverages_combined.csv", names(qc_files))], function(x){
-  colnames(x) <- c('barcode', 'fraction_1', 'fraction_5', 'fraction_10', 'fraction_25', 'median_coverage', 'mean_coverage', 'min_coverage', 'max_coverage')
-  return(x)
-})
+#combine the Atrandi table with the 10X table
+final_data <- qc_files[grep("coverages_combined.csv", names(qc_files))] %>%
+  bind_rows()
+
+qc_files[grep("coverages_combined.csv", names(qc_files))] <- NULL
+qc_files[["coverages_combined.csv"]] <- final_data
+rm(final_data)
+
+final_data <- qc_files[grep("coverages_combined_subsampling.csv", names(qc_files))] %>%
+  bind_rows()
+
+qc_files[grep("coverages_combined_subsampling.csv", names(qc_files))] <- NULL
+qc_files[["coverages_combined_subsampling.csv"]] <- final_data
+rm(final_data)
+
+#fix col names
+colnames(qc_files[["coverages_combined.csv"]]) <-  c('barcode', 'fraction_1', 'fraction_5', 'fraction_10', 'fraction_25', 'median_coverage', 'mean_coverage', 'min_coverage', 'max_coverage')
 colnames(qc_files[["coverages_combined_subsampling.csv"]]) <- c('barcode', 'fraction_1_sub', 'fraction_5_sub', 'fraction_10_sub', 'fraction_25_sub', 'median_coverage_sub', 'mean_coverage_sub', 'min_coverage_sub', 'max_coverage_sub')
 
 
-#remove underscores from barcodes and move them to row names
-##our barcodes have a number indicating fromw which library they come. So first I need to add it to the barcodes in the additional files
+#fix barcodes to match with other data
+##our barcodes have a number indicating from which library they come. 
+##So here I create a key/value pair list with the current barcodes in the table and the correct barcode as value. 
 barcodes <- lapply(all_SPCs, function(x)x$metadata$cells_meta) %>%
   bind_rows() %>%
   rownames_to_column("correct_barcode") %>%
   mutate(simple_barcode = gsub("_.*", "", correct_barcode)) %>%
-  mutate(simple_barcode = gsub("-.*", "", correct_barcode)) %>%
+  mutate(simple_barcode = gsub("-.*", "", simple_barcode)) %>%
   select(simple_barcode, correct_barcode) %>%
-  deframe()
+  deframe() 
 
 #now correct the barcodes in the qc files
 qc_files <- lapply(qc_files, function(x){
   x <- x %>%
     rownames_to_column("rownames") %>%
     mutate(barcode = gsub("_|subsampled", "", barcode)) %>%
+    mutate(barcode = gsub("-.*", "", barcode)) %>%
     filter(barcode %in% names(barcodes)) %>%
     mutate(barcode_correct = barcodes[barcode]) %>%
     mutate(rownames = barcode_correct) %>%
@@ -123,12 +137,7 @@ cells_meta %>%
   write_delim(file = "inputs/cell_qc/cells_meta.tsv")
 #write.xlsx(cells_meta, file = "inputs/cell_qc/cells_meta.xlsx")
 
-#visualize gini and mapd
+
 cells_meta %>%
-  filter(sample != "Sample 4") %>%
-  filter(cell_or_background == "cell") %>%
-  filter(!is_outlier) %>%
-  ggplot(aes(x = mapd, y = gini, color = strain))+
-  geom_point()+
-  scale_y_continuous(limits = c(0,1), breaks = c(0:10)/10)+
-  facet_grid(cols = vars(sample), scales = "free")
+  group_by(sample) %>%
+  summarise(mean(fraction_1, na.rm = TRUE), mean(fraction_5, na.rm = TRUE))

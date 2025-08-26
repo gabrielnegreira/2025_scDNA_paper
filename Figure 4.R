@@ -135,13 +135,14 @@ density_plot <- cells_meta %>%
   scale_fill_manual(values = strain_colors)+
   scale_x_continuous(n.breaks = 10) +
   labs(x = "haploid copy number", fill = "strain", y = "density")+
-  facet_grid(rows = vars(CNV), cols = vars(sample), scales = "free")+
+  facet_grid(rows = vars(fct_rev(CNV)), cols = vars(sample), scales = "free")+
   theme_bw()+
   theme(panel.grid.minor = element_blank())
 
-hm_plot <- ggalign::align_plots(!!!hm_list)
+top <- ggalign::align_plots(!!!hm_list[c(2,4)]) + layout_tags(NULL)
+bottom <- ggalign::align_plots(!!!hm_list[c(1,3)]) + layout_tags(NULL)
 
-final <- align_plots(hm_plot, NULL, density_plot, ncol = 1, heights = c(0.69, 0.02, 0.29))
+final <- align_plots(top, bottom, density_plot, ncol = 1, heights = c(0.35, 0.35, 0.3))
 final <- final + layout_tags("A") + layout_theme(plot.tag = element_text(size = 16))
 
 #save the final figure panel####

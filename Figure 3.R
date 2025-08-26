@@ -59,7 +59,8 @@ for(Sample in c("Sample 2", "Sample 6")){
   #plot density
   dens_plot <- ggplot(data.frame(value = as.vector(matrix_to_plot)), aes(x = value))+
     geom_density()+
-    scale_x_continuous(name = "Raw Somies", breaks = c(1:100))
+    scale_x_continuous(name = "Raw Somies", breaks = c(1:100))+
+    scale_y_continuous(name = NULL, breaks = NULL)
   
   #plot core heatmap
   hm_plot <- ggheatmap(matrix_to_plot, filling = NULL) + #start the heatmap
@@ -68,7 +69,7 @@ for(Sample in c("Sample 2", "Sample 6")){
     scale_x_discrete(labels = NULL, breaks = NULL)+ #remmoves cell labels
     anno_left(size = 0)+ #create an empty left annotation(needed for the next step)
     align_order(rev(rownames(matrix_to_plot)))+ #reverse the order of the plot
-    anno_top(size = 0.2) + #create an anotation space in the top
+    anno_top(size = 0.3) + #create an anotation space in the top
     free_border(dens_plot, borders = "l") + #align the density plot on top of the matrix
     patch_titles(top = Sample)+ #add a title to the top annotation
     anno_top() + #create another annotation space at the top
@@ -86,35 +87,35 @@ for(Sample in c("Sample 2", "Sample 6")){
 #align both figures
 figures[[length(figures) + 1]] <- ggalign::align_plots(!!!plot_list, guides = "r")
 
-##plot figure 3B####
-to_plot <- cells_meta %>%
-  filter(strain != "doublet") %>%
-  filter(!is.na(karyotype)) %>%
-  group_by(strain, experiment, sample, karyotype) %>%
-  summarise(ncells = n()) %>%
-  group_by(sample, strain) %>%
-  arrange(desc(ncells), .by_group = TRUE) %>%
-  mutate(proportion = ncells/sum(ncells)) %>%
-  mutate(karyo_position = as.integer(fct_reorder(karyotype, desc(ncells)))) %>%
-  mutate(karyo_id = paste0("kar", karyo_position)) %>%
-  ungroup()
 
-#create barplots on top
 plot_list <-list()
 for(Strain in c("BPK081", "HU3")){
-  karyo_in_10X <- to_plot %>%
+  
+  ##plot figure 3B####
+  to_plot <- cells_meta %>%
     filter(strain == Strain) %>%
+    filter(!is.na(karyotype)) %>%
+    group_by(strain, experiment, sample, karyotype) %>%
+    summarise(ncells = n()) %>%
+    group_by(sample, strain) %>%
+    arrange(desc(ncells), .by_group = TRUE) %>%
+    mutate(proportion = ncells/sum(ncells)) %>%
+    mutate(karyo_position = as.integer(fct_reorder(karyotype, desc(ncells)))) %>%
+    mutate(karyo_id = paste0("kar", karyo_position)) %>%
+    ungroup()
+  
+  karyo_in_10X <- to_plot %>%
     filter(experiment == "10X") %>%
     select(karyotype, karyo_position) %>%
     deframe()
   
   df <- to_plot %>%
     filter(karyo_position <= 5) %>%
-    filter(strain == Strain) %>%
     mutate(position_in_10X = karyo_in_10X[karyotype]) %>%
     mutate(position_in_10X = factor(ifelse(is.na(position_in_10X), "not present",
                                            ifelse(position_in_10X > 5, "not in top 5", position_in_10X)))) %>%
     mutate(name = paste0(sample, "_", karyo_position))
+  
   hm <- df %>%
     separate(karyotype, sep = "_", into = rownames(true_cells[[5]]$somies$int_somy_matrix), remove = FALSE) %>%
     column_to_rownames("name") %>%
@@ -131,6 +132,7 @@ for(Strain in c("BPK081", "HU3")){
   col_labels <- df %>%
     select(name, karyo_position) %>%
     deframe()
+  
   #reverse the order of the rows
   hm <- hm[rev(rownames(hm)),]
   breaks <- sort(unique(as.vector(hm)))
@@ -152,7 +154,7 @@ for(Strain in c("BPK081", "HU3")){
     geom_text(vjust = -0.3, size = 3.7, color = "white")+
     geom_text(vjust = -0.3, size = 3.5, color = "black")+
     facet_wrap(vars(sample), nrow = 1)+
-    scale_y_continuous(limits = c(0, 1))+
+    #scale_y_continuous(limits = c(0, 1))+
     coord_cartesian(clip = "off")+
     #{if(Strain == "BPK081")guides(fill = "none")}+
     ggtitle(Strain)+
@@ -166,59 +168,74 @@ for(Strain in c("BPK081", "HU3")){
           strip.clip = "off", 
           panel.spacing = unit(10, "pt"))
   
-  plot_list[[Strain]] <- ggalign::align_plots(bar_plot, heat_map, ncol = 1, heights = c(0.2, 0.8), guides = "r") + layout_tags(NULL)
-}
-
-figures[[length(figures) + 1]] <- ggalign::align_plots(!!!plot_list, guides = "r", )
-
-##plot figure 3C####
-to_plot <- to_plot %>%
-  mutate(name = paste(experiment, strain, sample, sep = "<br>")) %>%
-  select(-proportion, -karyo_position, -karyo_id, -experiment, -strain, -sample) %>%
-  pivot_wider(names_from = name, values_from = ncells) %>%
-  pivot_longer(cols = -karyotype, values_to = "ncells") %>%
-  separate(name, into = c("experiment", "strain", "sample"), sep = "<br>")
-
-#make it pairwise
-to_plot$`10X` <- NA
-for(Strain in unique(to_plot$strain)){
+  hm <- ggalign::align_plots(bar_plot, heat_map, ncol = 1, heights = c(0.2, 0.8), guides = "r") + layout_tags(NULL)
+  
+  
+  ##plot the flow plot####
+  to_plot <- to_plot %>%
+    mutate(name = paste(experiment, strain, sample, sep = "<br>")) %>%
+    select(-proportion, -karyo_position, -karyo_id, -experiment, -strain, -sample) %>%
+    pivot_wider(names_from = name, values_from = ncells) %>%
+    pivot_longer(cols = -karyotype, values_to = "ncells") %>%
+    separate(name, into = c("experiment", "strain", "sample"), sep = "<br>")
+  
+  #make it pairwise
+  to_plot$`10X` <- NA
   ncells_in_10X <- to_plot %>%
     filter(strain == Strain & experiment == "10X") %>%
     select(karyotype, ncells) %>%
     deframe()
+  
   to_plot <- to_plot %>%
     mutate(`10X` = ifelse(strain == Strain, ncells_in_10X[karyotype], `10X`))
+
+  flow_plot <- to_plot %>%
+    filter(experiment != "10X") %>%
+    select(-experiment) %>%
+    rename(Atrandi = ncells) %>%
+    pivot_longer(cols = c(Atrandi, `10X`), names_to = "experiment", values_to = "ncells") %>%
+    mutate(ncells = ifelse(is.na(ncells), 0, ncells)) %>%
+    #mutate(experiment = fct_rev(factor(experiment))) %>%
+    group_by(sample, experiment) %>%
+    mutate(proportion = ncells/sum(ncells)) %>%
+    group_by(sample, strain, karyotype) %>%
+    mutate(max_prop = max(proportion, na.rm = TRUE)) %>%
+    arrange(strain, sample, desc(max_prop)) %>%
+    group_by(strain, sample, experiment) %>%
+    mutate(position = row_number()) %>%
+    mutate(color = ifelse(position <= 10, karyotype, NA)) %>%
+    mutate(experiment = c(Atrandi = "SPC-scDNA", `10X` = "10X-scDNA")[experiment]) %>%
+    select(experiment, proportion, karyotype, color, strain) %>%
+    ggplot(aes(x = experiment, y = proportion, alluvium = karyotype, stratum = karyotype, group = karyotype, fill = color))+
+    geom_alluvium(decreasing = FALSE, color = NA)+
+    #geom_flow(decreasing = FALSE, color = NA)+
+    #geom_stratum(decreasing = FALSE, alpha = 0.8, color = NA)+
+    guides(fill = "none")+
+    scale_x_discrete(name = NULL, expand = c(0.1, 0.1))+
+    scale_y_continuous(expand = c(0,0))+
+    facet_wrap(vars(sample), ncol = 1)+
+    theme(legend.position = "right")
+  
+  flow_plot <- flow_plot + scale_fill_manual(values = create_colors(flow_plot$data$color, palette = "colorblind friendly"))
+  #flow_plot <- ggalign::align_plots(NULL, flow_plot, ncol = 1, heights = c(0.2, 0.8)) + layout_tags(NULL)
+  
+  figures[[length(figures) + 1]] <- ggalign::align_plots(hm, flow_plot, nrow = 1, widths = c(0.8, 0.2))
 }
 
+final <- ggalign::align_plots(figures[[1]], figures[[2]], figures[[3]], ncol = 1, heights = c(0.3, 0.35, 0.35))
+final <- final + layout_tags("A") + layout_theme(plot.tag = element_text(size = 16))
 
-plot <- to_plot %>%
-  filter(experiment != "10X") %>%
-  select(-experiment) %>%
-  rename(Atrandi = ncells) %>%
-  pivot_longer(cols = c(Atrandi, `10X`), names_to = "experiment", values_to = "ncells") %>%
-  mutate(ncells = ifelse(is.na(ncells), 0, ncells)) %>%
-  mutate(experiment = fct_rev(factor(experiment))) %>%
-  group_by(strain,sample, experiment) %>%
-  mutate(proportion = ncells/sum(ncells)) %>%
-  group_by(sample, strain, karyotype) %>%
-  mutate(max_prop = max(proportion, na.rm = TRUE)) %>%
-  arrange(strain, sample, desc(max_prop)) %>%
-  group_by(strain, sample, experiment) %>%
-  mutate(position = row_number()) %>%
-  mutate(color = ifelse(position <= 10, karyotype, NA)) %>%
-  mutate(experiment = c(Atrandi = "Test", `10X` = "10X scCNV")[experiment]) %>%
-  ggplot(aes(x = fct_rev(experiment), y = proportion, alluvium = karyotype, stratum = karyotype, group = karyotype, fill = color))+
-  geom_alluvium(decreasing = FALSE, color = NA)+
-  #geom_flow(decreasing = FALSE, color = NA)+
-  #geom_stratum(decreasing = FALSE, alpha = 0.8, color = NA)+
-  guides(fill = "none")+
-  labs(x = "Experiment")+
-  scale_x_discrete(expand = c(0.1, 0.1))+
-  scale_y_continuous(expand = c(0,0))+
-  facet_grid(rows = vars(strain), cols = vars(sample))+
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+#save the final figure panel####
+plot_scale <- 1.8
+ggsave("figure_3.pdf", plot = final, width = 8.27 * plot_scale, height = 10.5 * plot_scale)
 
-figures[[length(figures) + 1]] <- plot+scale_fill_manual(values = create_colors(plot$data$color, palette = "colorblind friendly"))
+#open it
+if (Sys.info()["sysname"] == "Darwin") {
+system2("open", args = "figure_3.pdf", wait = FALSE)
+} else if (Sys.info()["sysname"] == "Linux") {
+system2("xdg-open", args = "figure_3.pdf", wait = FALSE)
+}
+
 
 ##plot figure 3D####
 #get karyotypes for each strain
@@ -333,18 +350,3 @@ for(strain_to_plot in c("BPK081", "HU3")){
 }
 
 figures[[length(figures) + 1]] <- ggalign::align_plots(!!!net_plot_list, nrow = 1) + layout_tags(NULL)
-
-final <- ggalign::align_plots(figures[[1]], figures[[2]], figures[[3]], ncol = 1)
-final <- final + layout_tags("A") + layout_theme(plot.tag = element_text(size = 16))
-
-#save the final figure panel####
-plot_scale <- 1.8
-ggsave("figure_3.pdf", plot = final, width = 8.27 * plot_scale, height = 11 * plot_scale)
-
-#open it
-if (Sys.info()["sysname"] == "Darwin") {
-system2("open", args = "figure_3.pdf", wait = FALSE)
-} else if (Sys.info()["sysname"] == "Linux") {
-system2("xdg-open", args = "figure_3.pdf", wait = FALSE)
-}
-

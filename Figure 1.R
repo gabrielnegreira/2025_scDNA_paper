@@ -5,7 +5,7 @@ source("clean_environment.R")
 ##...as its dependency on a beta version of `ggplot2` was breaking `ggtree` in other scripts. Hence, we use...
 ##... `libPaths` to call ggalign in that environment instead.
 
-.libPaths("~/R/lib-ggalign_beta")
+#.libPaths("~/R/lib-ggalign_beta")
 #load libraries####
 library(tidyverse)
 library(ggridges)
@@ -86,28 +86,31 @@ figures[[length(figures) + 1]] <- all_SPCs_meta  %>%
         panel.grid.minor = element_blank())
 
 #remove background cells####
-all_SPCs_meta <- filter(all_SPCs_meta, cell_or_background == "cell" & sample != "Sample 4")
+all_SPCs_meta <- filter(all_SPCs_meta, cell_or_background == "cell")
 
 ##plot figure 1E####
 figures[[length(figures) + 1]] <- all_SPCs_meta  %>%
   filter(experiment == "Atrandi") %>%
-  ggplot(aes(x = n_reads, y = fraction_HU3, color = strain))+
-  geom_point()+
+  ggplot(aes(x = n_reads, y = fraction_HU3, fill = strain))+
+  geom_point(size = 2, shape = 21, stroke = 0.1)+
   scale_x_continuous(labels = scientific)+
-  scale_color_manual(values = c(HU3 = "black", BPK081 = "darkblue", doublet = "darkred", low_cov = "grey"))+
+  scale_fill_manual(values = strain_colors)+
   scale_y_continuous(limits = c(0,1))+
-  labs(x = "Total reads", y = "fraction HU3 signature", color = "Strain")+
+  labs(x = "Total reads", y = "fraction HU3 signature", fill = "Strain")+
   facet_wrap(vars(sample), scales = "free_x", nrow = 1)+
   theme_bw()+
   theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
         panel.grid.minor = element_blank())
 
 ##remove doublets####
-cells_meta <- filter(cells_meta, strain != "doublet")
+cells_meta <- filter(cells_meta, strain != "doublet" & sample != "Sample 4")
 
 ##plot figure 1F####
 for(fraction in c("mean_coverage", "fraction_1", "fraction_5", "fraction_1_sub")){
   figures[[length(figures) + 1]] <- cells_meta %>%
+    #mutate(sample = ifelse(sample == "10X", paste(sample, strain), sample)) %>%
+    #mutate(sample = paste(sample, strain)) %>%
+    filter(!is.na(.data[[fraction]])) %>%
     ggplot(aes(x = sample, y = .data[[fraction]], fill = sample))+
     geom_violin(scale = "width")+
     geom_boxplot(fill = "white", width = 0.25, outlier.size = 0.5)+

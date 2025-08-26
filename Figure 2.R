@@ -53,12 +53,16 @@ figures[[length(figures) + 1]] <- bins_meta %>%
   geom_smooth(method = "lm", se = FALSE, color = "blue", linewidth = 1) +  # Linear model line
   scale_x_continuous(limits = c(0.5, 0.7))+
   labs(x = "GC content", y = "Read Counts")+
-  facet_grid(rows = vars(sample), cols = vars(fct_rev(count_type)), scales = "free")
+  facet_grid(rows = vars(sample), cols = vars(fct_rev(count_type)), scales = "free")+
+  theme_bw()+
+  theme(panel.grid.minor = element_blank())
 
 ##plot figure 2B####
 #compare raw vs corrected counts
 to_plot <- list()
 to_plot[["raw"]] <- lapply(true_cells, function(x)x$counts$raw_counts)
+breaks <- unique(bins_meta$chromosome)
+breaks <- breaks[seq(1, 35, by = 2)]
 
 figures[[length(figures) + 1]] <- bins_meta %>%
   #filter(experiment == "Atrandi") %>%
@@ -70,13 +74,14 @@ figures[[length(figures) + 1]] <- bins_meta %>%
   group_by(sample, chromosome) %>%
   filter(!count %in% boxplot.stats(count)) %>%
   mutate(count_type = c(mean_raw_counts = "Raw Counts", mean_corrected_counts = "Corrected Counts")[count_type]) %>%
-  ggplot(aes(x = bin_position, y = count, color = chromosome))+
-  geom_point()+
-  #geom_boxplot(outliers = FALSE)+
-  scale_color_manual(values = rep(c("black", "orange"), times = 100))+
+  ggplot(aes(x = chromosome, y = count))+
+  geom_boxplot(outliers = FALSE)+
+  scale_x_discrete(breaks = breaks, labels = seq(1, 35, by = 2))+
   guides(color = "none")+
-  labs(x = "20 kb bin", y = "Mean count")+
-  facet_grid(cols = vars(fct_rev(count_type)), rows = vars(sample), scale = "free")
+  labs(x = "Chromosome", y = "Mean count")+
+  facet_grid(cols = vars(fct_rev(count_type)), rows = vars(sample), scale = "free")+
+  theme_bw()+
+  theme(panel.grid.minor = element_blank(), panel.grid.major.x = element_blank())
 
 ##plot figure 2C#####
 ##compare lorenz curves with and without GC correction
@@ -193,8 +198,8 @@ for(metric in c("gini", "mapd", "ICCV", "ICF_score")){
     ggplot(aes(x = factor(sample), y = .data[[metric]]))+
     geom_violin(aes(fill = factor(sample)), size = 0.2)+
     geom_boxplot(width = 0.075, outlier.size = 0.1, size = 0.2)+
-    #stat_pwc(aes(group = sample), ref.group = "10X", method = "wilcox_test", label = "p.adj.signif", p.adjust.method = "hochberg", hide.ns = TRUE)+
-    stat_pvalue_manual(stat.test, label = "p.adj.signif")+
+    stat_pwc(aes(group = sample), ref.group = "10X", method = "wilcox_test", label = "p.adj.signif", p.adjust.method = "hochberg", hide.ns = TRUE)+
+    #stat_pvalue_manual(stat.test, label = "p.adj.signif")+
     labs(x = NULL, y = metric)+
     guides(fill = "none")+
     scale_y_continuous(expand =c(0, 0.15))+
@@ -218,7 +223,7 @@ names(color_palette) <- breaks
 #create the plot list where both plots will be stored
 plot_list <- list()
 #make the same plot for samples 2 (index 2) and sample 6 (index 5 because sample 4 was removed from true_cells)
-for(i in c(2, 5)){
+for(i in c("10X", "Sample 2", "Sample 6")){
   #remove outlier bins
   bins <- true_cells[[i]]$metadata$bins_meta %>%
     filter(!is_outlier & is_mappable) %>%
@@ -228,8 +233,13 @@ for(i in c(2, 5)){
     factor() %>%
     fct_rev()
   
+  #remove outlier cells
+  cells <- true_cells[[i]]$metadata$cells_meta %>%
+    filter(!is_outlier) %>%
+    rownames()
+  
   #get normalized counts
-  matrix_to_plot <- true_cells[[i]]$counts$normalized_counts[names(bins),] #get corrected counts
+  matrix_to_plot <- true_cells[[i]]$counts$normalized_counts[names(bins), cells] #get corrected counts
   matrix_to_plot <- apply(matrix_to_plot, 2, normalize, method = "density_peak")
   matrix_to_plot <- matrix_to_plot*2
   #get cells' strain
@@ -282,7 +292,7 @@ figures[[length(figures) + 1]] <- ggalign::align_plots(!!!plot_list, guides = "r
 top <- ggalign::align_plots(!!!figures[c(1, 2)], widths = c(0.2, 0.8))
 middle <- ggalign::align_plots(free_border(figures[[3]], borders = "b"), figures[[4]], widths = c(0.2, 0.8))
 final <- ggalign::align_plots(top, middle, figures[[5]], ncol = 1, heights = c(0.35, 0.15, 0.5))
-final <- final + layout_tags("A") & layout_theme(plot.tag = element_text(size = 16))
+final <- final + layout_tags("A") + layout_theme(plot.tag = element_text(size = 16))
 
 #save the final figure panel####
 plot_scale <- 1.8
