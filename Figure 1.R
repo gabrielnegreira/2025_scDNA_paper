@@ -110,6 +110,7 @@ for(fraction in c("mean_coverage", "fraction_1", "fraction_5", "fraction_1_sub")
   figures[[length(figures) + 1]] <- cells_meta %>%
     #mutate(sample = ifelse(sample == "10X", paste(sample, strain), sample)) %>%
     #mutate(sample = paste(sample, strain)) %>%
+    filter(experiment == "Atrandi") %>%
     filter(!is.na(.data[[fraction]])) %>%
     ggplot(aes(x = sample, y = .data[[fraction]], fill = sample))+
     geom_violin(scale = "width")+

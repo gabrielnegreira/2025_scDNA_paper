@@ -26,14 +26,19 @@ cells_meta <- read_delim("inputs/cell_qc/cells_meta.tsv") %>%
 all_SPCs[["10X"]] <- scDNA10X
 true_cells[["10X"]] <- scDNA10X
 rm(scDNA10X)
+##set base theme parameters for ggplot####
+update_geom_defaults("point", list(size = 0.1))
+update_geom_defaults("boxplot", list(outlier.size = 0.5))
 
 #bind bins_meta####
 bins_meta <- lapply(true_cells, function(x) x$metadata$bins_meta)
 bins_meta <- bind_rows(bins_meta)
 
-##set base theme parameters for ggplot####
-update_geom_defaults("point", list(size = 0.1))
-update_geom_defaults("boxplot", list(outlier.size = 0.5))
+bins_meta <- bins_meta %>%
+  mutate(sample = ifelse(experiment == "10X", paste(sample, strain), sample))
+
+cells_meta <- cells_meta %>%
+  mutate(sample = ifelse(experiment == "10X", paste(sample, strain), sample))
 
 #plot the figures####
 #create an empty list to store the figures
@@ -178,28 +183,39 @@ figures[[length(figures) + 1]] <- lorenz_df %>%
 
 ##plot figure 2D####
 plot_list <- list()
+min_ncells <- cells_meta %>%
+  mutate(sample = ifelse(experiment == "10X", "10X", sample)) %>%
+  group_by(sample) %>%
+  summarise(n_cells = n()) %>%
+  pull("n_cells") %>%
+  min()
+
 for(metric in c("gini", "mapd", "ICCV", "ICF_score")){
-  stat.test <- cells_meta %>%
+  stat_data <- cells_meta %>%
+    mutate(sample = ifelse(experiment == "10X", "10X", sample)) #%>%
+    #slice_sample(n = min_ncells, by = sample)
+  
+  stat_test <- stat_data %>%
     wilcox_test(formula = as.formula(paste0(metric, " ~ sample")), ref.group = "10X", p.adjust.method = "hochberg") %>%
     add_significance("p.adj")
 
-  eff.size <- cells_meta %>%
-    wilcox_effsize(formula   = as.formula(paste0(metric, " ~ sample")), ref.group = "10X") %>%
-    mutate(effsize = round(effsize, 2)) %>%
-    select(.y., group1, group2, effsize, magnitude)
-
-  stat.test <- stat.test %>%
-    left_join(eff.size, by = c(".y.", "group1", "group2")) %>%
-    mutate(label = paste0(p.adj.signif, "\n(effect size: ", magnitude, ")")) %>%
-  add_xy_position(x = "sample", dodge = 0.8, step.increase = 0.25)
+  y_positions <- stat_data %>%
+    group_by(sample) %>%
+    summarise(y.position = max(.data[[metric]], na.rm = TRUE)) %>%
+    rename(group2 = sample)
+  
+  stat_test <- stat_test %>%
+    left_join(y_positions, by = "group2") %>%
+    mutate(y.position = y.position * 1.1)
   
   plot_list[[metric]] <- cells_meta %>%
     mutate(plot_label = metric) %>%
     ggplot(aes(x = factor(sample), y = .data[[metric]]))+
     geom_violin(aes(fill = factor(sample)), size = 0.2)+
     geom_boxplot(width = 0.075, outlier.size = 0.1, size = 0.2)+
-    stat_pwc(aes(group = sample), ref.group = "10X", method = "wilcox_test", label = "p.adj.signif", p.adjust.method = "hochberg", hide.ns = TRUE)+
-    #stat_pvalue_manual(stat.test, label = "p.adj.signif")+
+    geom_text(data = stat_test, aes(x = group2, y = y.position, label = p.adj.signif))+
+    #stat_pwc(aes(group = sample), ref.group = "10X", method = "wilcox_test", label = "p.adj.signif", p.adjust.method = "hochberg", hide.ns = TRUE)+
+    #stat_pvalue_manual(stat_test, label = "p.adj.signif")+
     labs(x = NULL, y = metric)+
     guides(fill = "none")+
     scale_y_continuous(expand =c(0, 0.15))+
@@ -291,12 +307,12 @@ figures[[length(figures) + 1]] <- ggalign::align_plots(!!!plot_list, guides = "r
 
 top <- ggalign::align_plots(!!!figures[c(1, 2)], widths = c(0.2, 0.8))
 middle <- ggalign::align_plots(free_border(figures[[3]], borders = "b"), figures[[4]], widths = c(0.2, 0.8))
-final <- ggalign::align_plots(top, middle, figures[[5]], ncol = 1, heights = c(0.35, 0.15, 0.5))
+final <- ggalign::align_plots(middle, figures[[5]], ncol = 1, heights = c(0.25, 0.75))
 final <- final + layout_tags("A") + layout_theme(plot.tag = element_text(size = 16))
 
 #save the final figure panel####
 plot_scale <- 1.8
-ggsave("figure_2.pdf", plot = final, width = 8.27 * plot_scale, height = 10 * plot_scale)
+ggsave("figure_2.pdf", plot = final, width = 8.27 * plot_scale, height = 7 * plot_scale)
 
 #open it
 if (Sys.info()["sysname"] == "Darwin") {
