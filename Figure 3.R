@@ -1,10 +1,6 @@
 #clean the environment####
 source("clean_environment.R")
 
-##to use the new `layout_tags()` function of `ggalign` I had to install it in a different environment... 
-##...as its dependency on a beta version of `ggplot2` was breaking `ggtree` in other scripts. Hence, we use...
-##... `libPaths` to call ggalign in that environment instead.
-.libPaths("~/R/lib-ggalign_beta")
 #load libraries####
 source("scDNA_functions_S3.R")
 source("color_palettes.R")
@@ -26,7 +22,10 @@ true_cells <- readRDS("inputs/karyotyping_objects/true_cells.rds")
 scDNA10X <- readRDS("inputs/karyotyping_objects/scDNA10X.rds")
 cells_meta <- read_delim("inputs/cell_qc/cells_meta.tsv") %>%
   column_to_rownames("rowname") %>%
-  filter(cell_or_background == "cell" & strain != "doublet" & sample != "Sample 4")
+  filter(cell_or_background == "cell" & strain != "doublet" & sample != "Sample 4") %>%
+  mutate(sample = factor(sample_names[sample], levels = sample_names))
+
+names(true_cells) <- sample_names[names(true_cells)]
 
 ##set base theme parameters for ggplot####
 update_geom_defaults("point", list(size = 0.5))
@@ -36,15 +35,15 @@ figures <- list()
 ##plot_figure 3A####
 ###creat a color pallete
 breaks <- lapply(true_cells, function(x)x$somies$raw_somy_matrix) #get the somies for each sample
-breaks <- breaks[c("Sample 2","Sample 6")] #subset only samples 2 and 6
+breaks <- breaks[c("SPC-STD2","SPC-PTA2")] #subset only samples 2 and 6
 breaks <- unique(as.integer(unlist(breaks))) #get all possible somy values
 breaks <- c(0:max(breaks)) #set the breaks to 0 to the maximum possible somy.
 color_palette <- heat_col(breaks) # create the heat color map.
 
 #create the plot list where both plots will be stored
 plot_list <- list()
-#make the same plot for samples 2 (index 2) and sample 6 (index 5 because sample 4 was removed from true_cells)
-for(Sample in c("Sample 2", "Sample 6")){
+#make the same plot for samples 2 (index 2) and SPC-PTA2 (index 5 because sample 4 was removed from true_cells)
+for(Sample in c("SPC-STD2", "SPC-PTA2")){
 
   #get raw somy matrix
   matrix_to_plot <- true_cells[[Sample]]$somies$raw_somy_matrix
@@ -123,31 +122,39 @@ for(Strain in c("BPK081", "HU3")){
     t() %>%
     as.matrix()
   
+  
   #split the matrix by sample
   col_groups <- df %>%
     select(name, sample) %>%
     deframe()
   
-  #get col labels
-  col_labels <- df %>%
-    select(name, karyo_position) %>%
-    deframe()
+  sample_order <- as.character(sample_names)
+  
+  # groups present in your plot (from the columns of hm)
+  present <- unique(col_groups[colnames(hm)])
+  sample_order_present <- sample_order[sample_order %in% present]
+  
+  # ordered factor **only with present levels**
+  grp <- factor(col_groups[colnames(hm)], levels = sample_order_present)
+ 
   
   #reverse the order of the rows
   hm <- hm[rev(rownames(hm)),]
   breaks <- sort(unique(as.vector(hm)))
-  heat_map <- ggheatmap(hm, filling = NULL)+
-    geom_tile(aes(fill = value), width = 0.98, color = "#2a5686")+
-    labs(y = "Chromosome", fill = "Somy")+
-    scale_x_discrete(name = NULL, labels = as.character(c(1:5)))+
-    scale_fill_manual(values = heat_col(breaks), breaks = breaks)+
-    facet_grid(switch = "x")+
-    theme(axis.text = element_text(), strip.text = element_text())+
-    anno_top()+
-    align_group(col_groups[colnames(hm)])+
-    anno_top()&
-    theme(panel.spacing = unit(10, "pt"))
-    
+  heat_map <- ggheatmap(hm, filling = NULL) +
+  geom_tile(aes(fill = value), width = 0.98, color = "#2a5686") +
+  scale_x_continuous(expand = c(0,0), labels = rep(paste0("kar.", c(1:5)), times = 6))+ 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  labs(y = "Chromosome", fill = "Somy")+
+  scale_fill_manual(values = heat_col(breaks), breaks = breaks)+
+  facet_grid(switch = "x", drop = TRUE)+
+  theme(axis.text = element_text(), strip.text.x = element_text(), strip.placement = "outside") + #this fixes the postion of the panel labels to be below column labels, not above it 
+  theme(axis.text = element_text(), strip.text = element_text())+
+  anno_bottom()+
+  align_group(grp)+
+  anno_top() &
+  theme(panel.spacing = unit(10, "pt"))
+  
   bar_plot <- df %>%
     ggplot(aes(x = karyo_position, y = proportion, label = ncells, fill = position_in_10X))+
     geom_col(color = "black")+
@@ -190,6 +197,7 @@ for(Strain in c("BPK081", "HU3")){
     mutate(`10X` = ifelse(strain == Strain, ncells_in_10X[karyotype], `10X`))
 
   flow_plot <- to_plot %>%
+    mutate(sample = factor(sample, levels = sample_names)) %>%
     filter(experiment != "10X") %>%
     select(-experiment) %>%
     rename(Atrandi = ncells) %>%
@@ -219,7 +227,7 @@ for(Strain in c("BPK081", "HU3")){
   flow_plot <- flow_plot + scale_fill_manual(values = create_colors(flow_plot$data$color, palette = "colorblind friendly"))
   #flow_plot <- ggalign::align_plots(NULL, flow_plot, ncol = 1, heights = c(0.2, 0.8)) + layout_tags(NULL)
   
-  figures[[length(figures) + 1]] <- ggalign::align_plots(hm, flow_plot, nrow = 1, widths = c(0.8, 0.2))
+  figures[[length(figures) + 1]] <- ggalign::align_plots(hm, free_border(flow_plot), nrow = 1, widths = c(0.8, 0.2))
 }
 
 final <- ggalign::align_plots(figures[[1]], figures[[2]], figures[[3]], ncol = 1, heights = c(0.3, 0.35, 0.35))

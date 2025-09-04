@@ -1,12 +1,6 @@
 #clean the environment####
 source("clean_environment.R")
 
-##to use the new `layout_tags()` function of `ggalign` I had to install it in a different environment... 
-##...as its dependency on a beta version of `ggplot2` was breaking `ggtree` in other scripts. Hence, we use...
-##... `libPaths` to call ggalign in that environment instead.
-
-.libPaths("~/R/lib-ggalign_beta")
-
 #load libraries####
 library(tidyverse)
 library(ggridges)
@@ -22,7 +16,7 @@ true_cells <- readRDS("inputs/karyotyping_objects/true_cells.rds")
 scDNA10X <- readRDS("inputs/karyotyping_objects/scDNA10X.rds")
 cells_meta <- read_delim("inputs/cell_qc/cells_meta.tsv") %>%
   column_to_rownames("rowname") %>%
-  filter(cell_or_background == "cell" & strain != "doublet" & sample != "Sample 4")
+  filter(cell_or_background == "cell" & strain != "doublet" & sample != "SPC-STD4")
 all_SPCs[["10X"]] <- scDNA10X
 true_cells[["10X"]] <- scDNA10X
 rm(scDNA10X)
@@ -30,15 +24,21 @@ rm(scDNA10X)
 update_geom_defaults("point", list(size = 0.1))
 update_geom_defaults("boxplot", list(outlier.size = 0.5))
 
+#fix sample names
+names(all_SPCs) <- sample_names[names(all_SPCs)]
+names(true_cells) <- sample_names[names(true_cells)]
+
 #bind bins_meta####
 bins_meta <- lapply(true_cells, function(x) x$metadata$bins_meta)
-bins_meta <- bind_rows(bins_meta)
+bins_meta <- bind_rows(bins_meta) 
 
 bins_meta <- bins_meta %>%
-  mutate(sample = ifelse(experiment == "10X", paste(sample, strain), sample))
+  mutate(sample = ifelse(experiment == "10X", paste(sample, strain), sample)) %>%
+  mutate(sample = factor(sample_names[sample], levels = sample_names))
 
 cells_meta <- cells_meta %>%
-  mutate(sample = ifelse(experiment == "10X", paste(sample, strain), sample))
+  mutate(sample = ifelse(experiment == "10X", paste(sample, strain), sample)) %>%
+  mutate(sample = factor(sample_names[sample], levels = sample_names))
 
 #plot the figures####
 #create an empty list to store the figures
@@ -48,7 +48,7 @@ figures <- list()
 figures[[length(figures) + 1]] <- bins_meta %>%
   #filter(experiment == "Atrandi") %>%
   select(sample, gc_content, mean_raw_counts, mean_corrected_counts) %>%
-  filter(sample != "Sample 4") %>%
+  filter(sample != "SPC-STD4") %>%
   pivot_longer(cols = c(mean_raw_counts, mean_corrected_counts), values_to = "count", names_to = "count_type") %>%
   mutate(count_type = c(mean_raw_counts = "Raw Counts", mean_corrected_counts = "Corrected Counts")[count_type]) %>%
   group_by(sample, count_type) %>%
@@ -74,7 +74,7 @@ figures[[length(figures) + 1]] <- bins_meta %>%
   group_by(sample) %>%
   mutate(bin_position = row_number()) %>%
   filter(!is_outlier & !is_empty) %>%
-  filter(sample != "Sample 4") %>%
+  filter(sample != "SPC-STD4") %>%
   pivot_longer(cols = c("mean_raw_counts", "mean_corrected_counts"), names_to = "count_type", values_to = "count") %>%
   group_by(sample, chromosome) %>%
   filter(!count %in% boxplot.stats(count)) %>%
@@ -159,9 +159,9 @@ labels_df <- lorenz_df %>%
   summarise(x = find_knee(x = frac_genome, y = mean, val_to_return = "x"),
             y = find_knee(x = frac_genome, y = mean, val_to_return = "y")) %>%
   filter(data == "corrected") %>%
-  filter(sample %in% c("10X", "Sample 1", "Sample 5")) %>%
-  mutate(label = ifelse(sample == "Sample 1", "Samples 1-3",
-                        ifelse(sample == "Sample 5", "Samples 5-6",
+  filter(sample %in% c("10X", "SPC-STD2", "SPC-PTA2")) %>%
+  mutate(label = ifelse(sample == "SPC-STD2", "SPC-STD1-3",
+                        ifelse(sample == "SPC-PTA2", "SPC-PTA1-2",
                                sample)))
   
 figures[[length(figures) + 1]] <- lorenz_df %>%
@@ -192,10 +192,11 @@ min_ncells <- cells_meta %>%
 
 for(metric in c("gini", "mapd", "ICCV", "ICF_score")){
   stat_data <- cells_meta %>%
-    mutate(sample = ifelse(experiment == "10X", "10X", sample)) #%>%
+    mutate(sample = ifelse(experiment == "10X", "10X", as.character(sample))) #%>%
     #slice_sample(n = min_ncells, by = sample)
   
   stat_test <- stat_data %>%
+    mutate(sample = as.character(sample)) %>%
     wilcox_test(formula = as.formula(paste0(metric, " ~ sample")), ref.group = "10X", p.adjust.method = "hochberg") %>%
     add_significance("p.adj")
 
@@ -238,8 +239,8 @@ color_palette <- heat_col(breaks)
 names(color_palette) <- breaks
 #create the plot list where both plots will be stored
 plot_list <- list()
-#make the same plot for samples 2 (index 2) and sample 6 (index 5 because sample 4 was removed from true_cells)
-for(i in c("10X", "Sample 2", "Sample 6")){
+#make the same plot for samples 2 (index 2) and SPC-PTA2 (index 5 because SPC-STD4 was removed from true_cells)
+for(i in c("10X", "SPC-STD2", "SPC-PTA2")){
   #remove outlier bins
   bins <- true_cells[[i]]$metadata$bins_meta %>%
     filter(!is_outlier & is_mappable) %>%
@@ -264,9 +265,6 @@ for(i in c("10X", "Sample 2", "Sample 6")){
     select(cell, strain) %>%
     deframe()
   
-  #get the sample
-  sample <- unique(true_cells[[i]]$metadata$cells_meta$sample)
-  
   #plot density
   dens_plot <- ggplot(data.frame(value = as.vector(matrix_to_plot)), aes(x = value))+
     geom_density()+
@@ -287,7 +285,7 @@ for(i in c("10X", "Sample 2", "Sample 6")){
     align_group(group = bins[rownames(matrix_to_plot)])+ #group bins by chromosome
     anno_top(size = 0.3) + #create an anotation space in the top
     free_border(dens_plot, borders = "l") + #initialize a ggplot object for the density plot
-    patch_titles(top = sample)+ #add a title to the top annotation
+    patch_titles(top = i)+ #add a title to the top annotation
     anno_top() + #create another annotation space at the top
     align_dendro(method = "ward.D2", size = 0.2)+ #add the dendogram (which also reorders the columns)
     theme_void()+ #remove irrelevant elements of the dendogram plot

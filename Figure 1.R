@@ -1,11 +1,6 @@
 #clean the environment####
 source("clean_environment.R")
 
-##to use the new `layout_tags()` function of `ggalign` I had to install it in a different environment... 
-##...as its dependency on a beta version of `ggplot2` was breaking `ggtree` in other scripts. Hence, we use...
-##... `libPaths` to call ggalign in that environment instead.
-
-#.libPaths("~/R/lib-ggalign_beta")
 #load libraries####
 library(tidyverse)
 library(ggridges)
@@ -17,12 +12,12 @@ source("color_palettes.R")
 #get inputs####
 all_SPCs <- readRDS("inputs/karyotyping_objects/all_SPCs.rds")
 cells_meta <- read_delim("inputs/cell_qc/cells_meta.tsv") %>%
-  column_to_rownames("rowname")
+  column_to_rownames("rowname") %>%
+  mutate(sample = factor(sample_names[sample], levels = sample_names))
 
 all_SPCs_meta <- lapply(all_SPCs, function(x)x$metadata$cells_meta) %>%
-  bind_rows()
-##set base theme parameters for ggplot####
-update_geom_defaults("point", list(size = 0.5))
+  bind_rows() %>%
+  mutate(sample = factor(sample_names[sample], levels = sample_names))
 
 #plot the figures####
 #create an empty list to store the figures

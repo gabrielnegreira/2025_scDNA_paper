@@ -1,11 +1,6 @@
 #clean the environment####
 source("clean_environment.R")
 
-##to use the new `layout_tags()` function of `ggalign` I had to install it in a different environment... 
-##...as its dependency on a beta version of `ggplot2` was breaking `ggtree` in other scripts. Hence, we use...
-##... `.libPaths` to call ggalign in that environment instead.
-#beta_lib <- "~/R/lib-ggalign_beta"
-#.libPaths(c(beta_lib, .libPaths()))  
 #load libraries####
 library(tidyr)
 library(dplyr)
@@ -32,7 +27,8 @@ drug_data <- read.xlsx("inputs/nucleotide_variants/drug_resistance_Ldon_v2.xlsx"
 #get cells metadata
 cells_meta <- read_delim("inputs/cell_qc/cells_meta.tsv") %>%
   column_to_rownames("rowname") %>%
-  filter(cell_or_background == "cell" & strain != "doublet" & sample != "Sample 4")
+  filter(cell_or_background == "cell" & strain != "doublet" & sample != "Sample 4") %>%
+  mutate(sample = factor(sample_names[sample], levels = sample_names))
 
 #plot figure 5A####
 ##get PCA eigen vectors
@@ -54,6 +50,7 @@ pca_data <- bind_rows(pca_data)
 ##plot it
 figure_5A <- pca_data %>%
   mutate(sample = paste("Sample", sample)) %>%
+  mutate(sample = factor(sample_names[sample], levels = sample_names)) %>%
   mutate(strain = ifelse(is.na(strain), "doublet", strain)) %>%
   ggplot(aes(x = PC1, y = PC2, fill = strain))+
   geom_point(size = 2, shape = 21, stroke = 0.1)+
@@ -85,6 +82,7 @@ for(Sample in c("sample_1", "sample_2", "sample_3", "sample_5", "sample_6")){
   
   Sample <- gsub("sample", "Sample", Sample)
   Sample <- gsub("_", " ", Sample)
+  Sample <- sample_names[Sample]
   mat_list[[Sample]] <- mat
 }
 
@@ -96,10 +94,11 @@ for(Sample in names(mat_list)){
 
 figure_5B <- NA_plot %>%
   bind_rows() %>%
-  ggplot(aes(y = mean_NA, x = sample))+
+  mutate(sample = factor(sample, levels = sample_names)) %>%
+  ggplot(aes(y = 1-mean_NA, x = sample))+
   geom_violin(aes(fill = sample))+
   geom_boxplot(width = 0.075, outlier.size = 0.1, size = 0.2)+
-  scale_y_continuous(name = "% of NA values\nin variant loci", breaks = c(0:10)/10)+
+  scale_y_continuous(name = "fraction of cells with\nconfident variant call", breaks = c(0:10)/10)+
   scale_x_discrete(name = NULL)+
   scale_fill_manual(values = sample_colors)+
   guides(fill = "none")+
@@ -117,7 +116,7 @@ strains <- cells_meta %>%
 plot_list <- list()
 for(Sample in c("Sample 2", "Sample 6")){
   sample_number <- as.integer(gsub("Sample ", "", Sample))
-  
+  Sample <- sample_names[Sample]
   snpeff_data <- read.delim(paste0("inputs/nucleotide_variants/sample_6.filtered.drugs.snpeff.csv"))
   #add the drug_data to the sneff_data
   snpeff_data <- fuzzy_inner_join(snpeff_data, drug_data,

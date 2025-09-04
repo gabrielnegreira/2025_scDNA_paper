@@ -1,6 +1,18 @@
 library(RColorBrewer)
 library(scico) #installed with devtools::install_github("thomasp85/scico")
 
+#set name/value pair to replace sample names for final plots
+#this also is used to set factor level to order the samples on the plot, so order here matters!
+sample_names <- c(`10X BPK081` = "10X BPK081",
+                  `10X HU3` = "10X HU3",
+                  `10X` = "10X",
+                  `Sample 1` = "SPC-STD1",
+                  `Sample 2` = "SPC-STD2",
+                  `Sample 3` = "SPC-STD3",
+                  `Sample 4` = "SPC-STD4",
+                  `Sample 5` = "SPC-PTA1",
+                  `Sample 6` = "SPC-PTA2")
+
 #create a function to map somy values to colors
 #heat_col####
 #this is a function used to generate the colors for the heatmaps
@@ -87,12 +99,12 @@ names(strain_colors) <- c("BPK081", "HU3", "doublet")
 
 #colors for samples
 sample_colors <- c("#f9ce84", "#c48519", "#754a00", "#2d1d00", "#b7d6a3", "#307800", "#6baee5", "#0a4677", "#0a4677")
-names(sample_colors) <- c(paste("Sample", c(1:6)), "10X BPK081", "10X HU3", "10X")
+names(sample_colors) <- c("SPC-STD1", "SPC-STD2", "SPC-STD3", "SPC-STD4", "SPC-PTA1", "SPC-PTA2", "10X HU3", "10X BPK081", "10X")
 
 #colors for snp heatmaps
 snp_colors <- rev(brewer.pal(7, name = "RdYlBu")[c(1,4,7)])
 names(snp_colors) <- c(0, 1, 2)
 
 #use this command to visualize a color palette
-colors <- sample_colors
+#colors <- sample_colors
 #barplot(rep(1, length(colors)),col = colors,border = NA, space = 0, names.arg = seq_along(colors), las = 1)

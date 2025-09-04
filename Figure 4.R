@@ -1,12 +1,6 @@
 #clean the environment####
 source("clean_environment.R")
 
-##to use the new `layout_tags()` function of `ggalign` I had to install it in a different environment... 
-##...as its dependency on a beta version of `ggplot2` was breaking `ggtree` in other scripts. Hence, we use...
-##... `.libPaths` to call ggalign in that environment instead.
-
-.libPaths("~/R/lib-ggalign_beta")
-
 #load libraries####
 source("scDNA_functions_S3.R")
 source("color_palettes.R")
@@ -17,11 +11,12 @@ library(ggalign)
 #get inputs
 cells_meta <- read_delim("inputs/cell_qc/cells_meta.tsv") %>%
   column_to_rownames("rowname") %>%
-  filter(cell_or_background == "cell" & strain != "doublet" & sample != "Sample 4")
-samples <- c(`sample_1` = "Sample 1", `sample_2` = "Sample 2", `sample_3` = "Sample 3", `sample_5` = "Sample 5", `sample_6` = "Sample 6")
-samples_to_plot <- c("Sample 2", "Sample 6")
+  filter(cell_or_background == "cell" & strain != "doublet" & sample != "Sample 4") %>%
+  mutate(sample = factor(sample_names[sample], levels = sample_names))
+
 chromosomes <- c("Ld29", "Ld36")
 regions <- list(Ld29 = c(9613, 9647), Ld36 =c(25620, 25679))
+samples_to_plot <- c("Sample 2", "Sample 6")
 
 #create a key/pair vector containing the correct barcode string for each barcode
 bcs <- cells_meta %>%
@@ -42,11 +37,16 @@ cnv_list <- list()
 hm_list <- list()
 dens_list <- list()
 cells_meta[chromosomes] <- NA
-for(Sample in names(samples)){
+for(Sample in paste("Sample", c(1,2,3,5,6))){
   cnv_list[[Sample]] <- list()
-  sample_name <- samples[Sample]
+  sample_name <- sample_names[Sample]
+
+  
   for(Chromosome in chromosomes) {
-    Pattern <- paste0("^", Sample, ".*", Chromosome, "_100nt_CNV\\.csv$")
+    Pattern <- Sample %>%
+      gsub(" ", "_", .) %>%
+      tolower()
+    Pattern <- paste0(Pattern, ".*", Chromosome, "_100nt_CNV.csv")
     cnv_file <-  list.files("inputs/cnvs/", pattern = Pattern)
     cnv_file <- paste0("inputs/cnvs/", cnv_file)
 
@@ -83,15 +83,15 @@ for(Sample in names(samples)){
       rownames_to_column("rowname") %>%
       mutate(!!Chromosome := ifelse(is.na(.data[[Chromosome]]), copy_numbers[rowname], .data[[Chromosome]])) %>%
       column_to_rownames("rowname")
-      
     
-    if(sample_name %in% samples_to_plot){
+    if(Sample %in% samples_to_plot){
       #trim the matrix to focus on the locus
       indices <- regions[[Chromosome]]
       indices[1] <- indices[1] - 100
       indices[2] <- indices[2] + 100
       indices <- indices[1]:indices[2]
       mat <- mat[indices,]
+      
       rownames(mat) <- indices*100
       #set row breaks
       breaks <- round(seq(1, nrow(mat), by = 10))
@@ -118,8 +118,7 @@ for(Sample in names(samples)){
       
       
       hm_list[[paste0(Sample, ": ", Chromosome)]] <- hm
-      
-    }
+    }  
   }
 }
 
