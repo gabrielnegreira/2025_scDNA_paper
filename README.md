@@ -1,4 +1,5 @@
-These are the scripts used for the paper ["A high throughput method for determining structural and sequence variations in Leishmania genomes at single-cell level"]().
+These are the scripts used for the paper **A novel high-throughput single-cell DNA sequencing method reveals hidden genomic heterogeneity in the unicellular eukaryote Leishmania**
+
 
 # Description
 1) `scDNA_functions_S3.R`: This contains the functions used for karyotyping. It defines a `scDNA` S3 object, which is basically a list of dataframes and matrices containing counts (cells X bins) as well as cells metadata and bins metadata. All results regarding karyotypying are stored in this object.
