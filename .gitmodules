@@ -1,0 +1,3 @@
+[submodule "git_modules/scDNA_tools"]
+	path = git_modules/scDNA_tools
+	url = https://github.com/gabrielnegreira/scDNA_tools

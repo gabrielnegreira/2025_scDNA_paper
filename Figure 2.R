@@ -7,7 +7,7 @@ library(ggridges)
 library(ggalign)
 library(ggpubr)
 library(rstatix)
-source("scDNA_functions_S3.R")
+source("git_modules/scDNA_tools/scDNA_functions.R")
 source("color_palettes.R")
 
 #get inputs####

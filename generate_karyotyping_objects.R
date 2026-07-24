@@ -5,7 +5,7 @@ gc()
 #libraries####
 library(xlsx)
 library(tidyverse) 
-source("scDNA_functions_S3.R")#this contains most of the functions used for the analysis
+source("git_modules/scDNA_tools/scDNA_functions.R")#this contains most of the functions used for the analysis
 
 #get inputs####
 counts_lib1 <- read.delim("inputs/atrandi_count_matrices/scDNA_AT_01_merged.txt")
@@ -18,7 +18,7 @@ bins_meta <- read.delim("inputs/atrandi_count_matrices/bin_gc_and_mappability_20
 out_dir <- "inputs/karyotyping_objects/"
 
 #set parameters####
-subset_reads <- 20000
+min_reads_threshold <- 20000
 
 #format inputs####
 #OBS: to create a scDNA object we need a count matrix, as well as a cell metadata and a bin metadata data frame for each sample.
@@ -62,6 +62,7 @@ cells_meta <- metadata %>%
 
 #prepare bins_meta####
 bins_meta <- bins_meta %>%
+  filter(chrom != "Ld37") %>%
   group_by(chrom) %>%
   mutate(bin = paste0(chrom, "_", row_number()), is_mappable = mappability >= 0.7, rownames = bin) %>%
   column_to_rownames("rownames") %>%
@@ -69,11 +70,10 @@ bins_meta <- bins_meta %>%
   ungroup()
 
 #create a list of scDNA objects, one per sample####
-genome_size <- 33035865 #needed to calculate effective_depth_of_coverage
 scDNAobj_list <- list()
 for(sample_to_get in sort(unique(cells_meta$sample))){
   cells <- rownames(filter(cells_meta, sample == sample_to_get))
-  scDNAobj_list[[sample_to_get]] <- build_scDNAobj(count_matrix = count_matrix[,cells], cells_meta = cells_meta[cells,], bins_meta = bins_meta, mean_read_length = 300, genome_size = genome_size)
+  scDNAobj_list[[sample_to_get]] <- build_scDNAobj(count_matrix = count_matrix[,cells], cells_meta = cells_meta[cells,], bins_meta = bins_meta)
 }
 
 #fix doublet detection threshold
@@ -110,7 +110,7 @@ true_cells <- scDNAobj_list[c(1,2,3,5,6)] %>%
   lapply(subset_cells, cell_or_background == "cell") %>%
   lapply(subset_cells, is_outlier == FALSE) %>%
   lapply(subset_cells, strain != "doublet") %>%
-  lapply(subsample_reads, target_total = subset_reads) %>%
+  lapply(subsample_reads, target_total = min_reads_threshold) %>%
   lapply(correct_counts, vars_to_correct = c("gc_content")) %>%
   lapply(tag_outlier_bins, additional_vars_to_check = c(gc_content = "upper", mappability = "lower", sim_unique_read_count = "both", mean_corrected_counts = "both")) %>%
   lapply(calc_cells_ICF, max_chromo = 5) %>%
@@ -142,7 +142,7 @@ for(i in seq_along(scDNA10X)){
 
 #remove cells with less than 20.000 reads (these are considered not good for karyotyping)
 scDNA10X <- scDNA10X %>%
-  lapply(subset_cells, n_reads >= subset_reads)
+  lapply(subset_cells, n_reads >= min_reads_threshold)
 
 #now set numeric id in barcodes of HU3 to 2
 
@@ -173,7 +173,7 @@ scDNA10X <- build_scDNAobj(count_matrix = counts, cells_meta = cells_meta, bins_
 
 #run the analysis
 scDNA10X <- scDNA10X %>% 
-  subsample_reads(target_total = subset_reads) %>% 
+  subsample_reads(target_total = min_reads_threshold) %>% 
   correct_counts(vars_to_correct = c("gc_content")) %>% 
   normalize_counts() %>% 
   tag_outlier_bins(additional_vars_to_check = c(gc_content = "upper", mappability = "lower", mean_corrected_counts = "both")) %>% 

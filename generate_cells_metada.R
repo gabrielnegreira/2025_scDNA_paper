@@ -8,7 +8,7 @@ library(tidyverse)
 library(UpSetR)
 library(xlsx)
 library(ineq)
-source("scDNA_functions_S3.R")
+source("git_modules/scDNA_tools/scDNA_functions.R")
 
 #get the karyotyping object
 all_SPCs <- readRDS("inputs/karyotyping_objects/all_SPCs.rds")

@@ -2,7 +2,7 @@
 source("clean_environment.R")
 
 #load libraries####
-source("scDNA_functions_S3.R")
+source("git_modules/scDNA_tools/scDNA_functions.R")
 source("color_palettes.R")
 library(tidyverse)
 library(ggridges)
