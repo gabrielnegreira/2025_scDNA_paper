@@ -19,6 +19,39 @@ all_SPCs_meta <- lapply(all_SPCs, function(x)x$metadata$cells_meta) %>%
   bind_rows() %>%
   mutate(sample = factor(sample_names[sample], levels = sample_names))
 
+#create tables####
+all_SPCs_meta %>%
+  group_by(sample) %>%
+  summarise(
+    `Methanol Fixation` = paste0(unique(Methanol.fixation), collapse = ";"),
+    `Lysis` = paste0(unique(Lysis.method), collapse = ";"),
+    `WGA` = paste0(unique(WGA), collapse = ";"),
+    `Total Reads` = sum(n_reads),
+    `detected SPCs` = n(),
+    `true cells` = sum(cell_or_background == "cell"),
+    `Reads in true cells` = sum(n_reads[cell_or_background == "cell"]),
+    `Median reads per cell` = median(n_reads[cell_or_background == "cell"]),
+    `n_HU3` = sum(cell_or_background == "cell" & strain == "HU3"),
+    `n_BPK` = sum(cell_or_background == "cell" & strain == "BPK081"),
+    `inter_doublets` = sum(cell_or_background == "cell" & strain == "doublet"),
+    freq_HU3 = n_HU3 / (n_HU3 + n_BPK),
+    freq_BPK = n_BPK / (n_HU3 + n_BPK),
+    fraction_detectable_doublets = 2 * freq_HU3 * freq_BPK, # given the proportion of each strain, this calculates the expected rates at which a doublet would be inter-strain, and not intra-strain
+    fraction_detected_doublets = inter_doublets / `true cells`,
+    fraction_total_doublets = fraction_detected_doublets / fraction_detectable_doublets,
+    estimated_doublets = round(fraction_total_doublets * `true cells`),
+    ) %>%
+  mutate(
+    Lysis = gsub("Atrandi ", "", Lysis),
+    Lysis = gsub("protocol", "", Lysis),
+    Lysis = gsub("Longer", "1h", Lysis),
+    Lysis = gsub("heat incubation", "99 ˚C", Lysis),
+    Lysis = gsub("Standard", "Standard*", Lysis),
+    WGA = gsub("Atrandi", "Standard**", WGA),
+      ) %>%
+  select(- contains("fraction"), - contains("freq_")) %>%
+  xlsx::write.xlsx("table_1.xlsx")
+
 #plot the figures####
 #create an empty list to store the figures
 figures <- list()
