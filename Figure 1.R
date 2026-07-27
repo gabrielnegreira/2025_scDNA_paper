@@ -15,7 +15,7 @@ cells_meta <- read_delim("inputs/cell_qc/cells_meta.tsv") %>%
   column_to_rownames("rowname") %>%
   mutate(sample = factor(sample_names[sample], levels = sample_names))
 
-all_SPCs_meta <- lapply(all_SPCs, function(x)x$metadata$cells_meta) %>%
+all_SPCs_meta <- lapply(all_SPCs, function(x)x$metadata$cells_meta) %>% 
   bind_rows() %>%
   mutate(sample = factor(sample_names[sample], levels = sample_names))
 
