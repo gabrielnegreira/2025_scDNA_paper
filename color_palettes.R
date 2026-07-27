@@ -13,37 +13,6 @@ sample_names <- c(`10X BPK081` = "10X BPK081",
                   `Sample 5` = "SPC-PTA1",
                   `Sample 6` = "SPC-PTA2")
 
-#create a function to map somy values to colors
-#heat_col####
-#this is a function used to generate the colors for the heatmaps
-heat_col <- function(breaks){
-  require(colorspace)
-  #set the color palette
-  colors <- c("#001221", "#002342", "#002342", 
-              "#014175", "#035ba3", "#00c3ff", 
-              "#00ffee", "#33ff00", "#ccff00", 
-              "#fffa00","#ffa600", "#D73027", 
-              "#A50026", "#541b1b", "#4d0600")
-  
-  #get the maximum value
-  breaks <- as.integer(breaks)
-  n <- max(breaks)
-  #by generating 9 colors with this palete, we make sure that values between 0 and 8 are mapped to discrete colors.
-  colors <- colorRampPalette(colors)(9)
-  #if it asks for more than 9 colors, it will generate the additional colors by darkening the last color
-  if(n >= 9){
-    for(i in c(10:(n+1))){
-      colors[i] <- darken(colors[i-1], amount = 0.4)
-    }
-  } 
-  #now covert values to indices. value 0 should be mapped to the first color, and so on.
-  breaks <- breaks+1
-  #map the colors to the values
-  colors <- colors[breaks]
-  names(colors) <- breaks-1
-  return(colors)
-}
-
 #create colors
 #this function takes a vector as input and returns a named vector with colors as values and name as elements from the input vector
 create_colors <-function(x, 
