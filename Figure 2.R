@@ -190,7 +190,7 @@ min_ncells <- cells_meta %>%
   pull("n_cells") %>%
   min()
 
-for(metric in c("gini", "mapd", "ICCV", "ICF_score")){
+for(metric in c("gini", "mapd", "ICF_score")){
   stat_data <- cells_meta %>%
     mutate(sample = ifelse(experiment == "10X", "10X", as.character(sample))) #%>%
     #slice_sample(n = min_ncells, by = sample)
@@ -217,7 +217,7 @@ for(metric in c("gini", "mapd", "ICCV", "ICF_score")){
     geom_text(data = stat_test, aes(x = group2, y = y.position, label = p.adj.signif))+
     #stat_pwc(aes(group = sample), ref.group = "10X", method = "wilcox_test", label = "p.adj.signif", p.adjust.method = "hochberg", hide.ns = TRUE)+
     #stat_pvalue_manual(stat_test, label = "p.adj.signif")+
-    labs(x = NULL, y = metric)+
+    labs(x = NULL, y = c(gini = "Gini", mapd = "MAPD", "ICF_score" = "S-phase Score")[metric])+
     guides(fill = "none")+
     scale_y_continuous(expand =c(0, 0.15))+
     scale_fill_manual(values = sample_colors)+
