@@ -40,7 +40,7 @@ cells_meta[chromosomes] <- NA
 for(Sample in paste("Sample", c(1,2,3,5,6))){
   cnv_list[[Sample]] <- list()
   sample_name <- sample_names[Sample]
-
+  
   
   for(Chromosome in chromosomes) {
     Pattern <- Sample %>%
@@ -49,7 +49,7 @@ for(Sample in paste("Sample", c(1,2,3,5,6))){
     Pattern <- paste0(Pattern, ".*", Chromosome, "_100nt_CNV.csv")
     cnv_file <-  list.files("inputs/cnvs/", pattern = Pattern)
     cnv_file <- paste0("inputs/cnvs/", cnv_file)
-
+    
     mat <- read.csv(cnv_file, row.names = 1) %>%
       as.data.frame() %>%
       mutate(rowname = paste0(chrom, "_", start)) %>%
@@ -68,7 +68,7 @@ for(Sample in paste("Sample", c(1,2,3,5,6))){
     
     #covert infinite values to 0
     mat[is.infinite(mat)] <- 0
-
+    
     #normalize the matrix
     mat[,] <- apply(mat, 2, normalize, method = "mean")
     
@@ -100,11 +100,13 @@ for(Sample in paste("Sample", c(1,2,3,5,6))){
       breaks <- format(breaks, big.mark = ",", scientific = FALSE)
       #set color scale
       color_range <- quantile(mat, c(0, 0.99))
+      #cap max value
+      mat[mat > quantile(mat, 0.99)] <- quantile(mat, 0.99)
       hm <- ggheatmap(mat)+
         scale_x_discrete(breaks = NULL)+
         scale_y_continuous(breaks = names(breaks), labels = breaks)+
         theme(axis.text = element_text())+
-        scale_fill_scico(palette = "lipari", limits = color_range, na.value = scico(100, palette = "lipari")[100])+
+        scale_fill_gradientn(name = "normalized\nread count" ,colors = unname(heat_col(c(1:8))))+
         anno_top(size = 0.3)+
         ggalign(size = 0)+
         patch_titles(top = paste0(sample_name, "; Chromosome: ", Chromosome))+
@@ -126,6 +128,7 @@ for(Sample in paste("Sample", c(1,2,3,5,6))){
 #plot density
 density_plot <- cells_meta %>%
   filter(experiment == "Atrandi") %>%
+  mutate(sample = factor(sample_names[sample], levels = sample_names)) %>%
   select(sample, strain, matches(chromosomes)) %>%
   pivot_longer(cols = -c(sample, strain), names_to = "Chromosome", values_to = "copy_number") %>%
   mutate(CNV = paste("CNV in chromosome", Chromosome)) %>%
@@ -150,7 +153,12 @@ ggsave("figure_4.pdf", plot = final, width = 8.27 * plot_scale, height = 9 * plo
 
 #open it
 if (Sys.info()["sysname"] == "Darwin") {
-system2("open", args = "figure_4.pdf", wait = FALSE)
+  system2("open", args = "figure_4.pdf", wait = FALSE)
 } else if (Sys.info()["sysname"] == "Linux") {
-system2("xdg-open", args = "figure_4.pdf", wait = FALSE)
+  system2("xdg-open", args = "figure_4.pdf", wait = FALSE)
 }
+
+data.frame(counts = rowSums(mat)) %>%
+  rownames_to_column("bin_number") %>%
+  ggplot(aes(x = bin_number, y = counts))+
+  geom_point()
