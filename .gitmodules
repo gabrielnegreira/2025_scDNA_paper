@@ -1,3 +1,9 @@
 [submodule "git_modules/scDNA_tools"]
 	path = git_modules/scDNA_tools
 	url = https://github.com/gabrielnegreira/scDNA_tools
+[submodule "git_modules/WGS_tools"]
+	path = git_modules/WGS_tools
+	url = git@github.com:gabrielnegreira/WGS_tools
+[submodule "git_modules/Illumina_tools"]
+	path = git_modules/Illumina_tools
+	url = git@github.com:gabrielnegreira/Illumina_tools
