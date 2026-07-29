@@ -44,7 +44,7 @@ color_palette <- heat_col(breaks) # create the heat color map.
 plot_list <- list()
 #make the same plot for samples 2 (index 2) and SPC-PTA2 (index 5 because sample 4 was removed from true_cells)
 for(Sample in c("SPC-STD2", "SPC-PTA2")){
-
+  
   #get raw somy matrix
   matrix_to_plot <- true_cells[[Sample]]$somies$raw_somy_matrix
   
@@ -91,9 +91,11 @@ plot_list <-list()
 for(Strain in c("BPK081", "HU3")){
   
   ##plot figure 3B####
-  to_plot <- cells_meta %>%
+  #create a dataframe with the karyotypes and the number of cells in each sample
+  karyo_df <- cells_meta %>%
     filter(strain == Strain) %>%
     filter(!is.na(karyotype)) %>%
+    mutate(sample = factor(sample, levels = sample_names[sample_names %in% sample])) %>% #set the order of the samples to the one specified by the global variable `sample_names`
     group_by(strain, experiment, sample, karyotype) %>%
     summarise(ncells = n()) %>%
     group_by(sample, strain) %>%
@@ -101,72 +103,102 @@ for(Strain in c("BPK081", "HU3")){
     mutate(proportion = ncells/sum(ncells)) %>%
     mutate(karyo_position = as.integer(fct_reorder(karyotype, desc(ncells)))) %>%
     mutate(karyo_id = paste0("kar", karyo_position)) %>%
+    mutate(karyo_name = paste0(sample, "_", karyo_position)) %>% #create a unique name for each karyotype by joining the sample name with the karyotype position.
     ungroup()
   
-  karyo_in_10X <- to_plot %>%
-    filter(experiment == "10X") %>%
-    select(karyotype, karyo_position) %>%
-    deframe()
   
-  df <- to_plot %>%
+  #now append the corresponding position of the karyotype in the 10X data
+  karyo_df <- karyo_df %>%
+    left_join(
+      karyo_df %>% #takes the same data frame (karyo_df)
+        filter(experiment == "10X") %>% #keepts only the 10X data
+        rename(position_in_10X = karyo_position, ncells_in_10X = ncells) %>% #renames the karyotype position to `position_in_10X`
+        select(karyotype, position_in_10X, ncells_in_10X), #keep only the relevant information: the karyotype and its position in the 10X data
+      by = "karyotype" #join the two dataframes by the `karyotype` column
+      ) %>%
+    mutate(plot_label = ifelse(is.na(position_in_10X), "not in 10X", paste0("10X_kar.", position_in_10X))) %>% #makes a label indicating the position of the karyotype in the 10X data (used later for plotting) %>%
+    mutate(plot_label_color =  ifelse(plot_label %in% paste0("10X_kar.", c(1:5)), "black", 
+                                 ifelse(plot_label == "not in 10X", "darkred", "lightgrey")))
+
+  
+  #create a matrix for the heatmap (hm) with the copy numbers
+  heat_matrix <- karyo_df %>%
     filter(karyo_position <= 5) %>%
-    mutate(position_in_10X = karyo_in_10X[karyotype]) %>%
-    mutate(position_in_10X = factor(ifelse(is.na(position_in_10X), "not present",
-                                           ifelse(position_in_10X > 5, "not in top 5", position_in_10X)))) %>%
-    mutate(name = paste0(sample, "_", karyo_position))
-  
-  hm <- df %>%
     separate(karyotype, sep = "_", into = rownames(true_cells[[5]]$somies$int_somy_matrix), remove = FALSE) %>%
-    column_to_rownames("name") %>%
+    column_to_rownames("karyo_name") %>%
     select(contains("Ld")) %>%
     t() %>%
     as.matrix()
   
+  #convert the values in the matrix to integers
+  row_names <- rownames(heat_matrix) #apply removes rownames, so first we save them 
+  heat_matrix <- apply(heat_matrix, 2, as.integer)
+  rownames(heat_matrix) <- row_names
+  rm(row_names)
   
-  #split the matrix by sample
-  col_groups <- df %>%
-    select(name, sample) %>%
+  #reverse the order of the rows (so the plot looks nice)
+  heat_matrix <- heat_matrix[rev(rownames(heat_matrix)),]
+  
+  #get a vector containing all possible somy values in the matrix (used to map the values to colors in the `geom_fill_manual` bellow)
+  breaks <- sort(unique(as.vector(heat_matrix)))
+  
+  #create a named vector for the x-axis labels and their colors
+  karyo_labels <- karyo_df %>%
+    select(karyo_name, plot_label) %>%
     deframe()
   
-  sample_order <- as.character(sample_names)
+  label_colors <- karyo_df %>%
+    select(karyo_name, plot_label_color) %>%
+    deframe()
   
-  # groups present in your plot (from the columns of hm)
-  present <- unique(col_groups[colnames(hm)])
-  sample_order_present <- sample_order[sample_order %in% present]
+  #match the labels and colors to the colnames of the matrix
+  karyo_labels <- karyo_labels[colnames(heat_matrix)]
+  label_colors <- label_colors[colnames(heat_matrix)]
   
-  # ordered factor **only with present levels**
-  grp <- factor(col_groups[colnames(hm)], levels = sample_order_present)
- 
+  #create a named vector specifying how to group the columns in the matrix (used later in `align_group` function)
+  col_groups <- karyo_df %>%
+    filter(karyo_name %in% colnames(heat_matrix)) %>%
+    select(karyo_name, sample) %>%
+    deframe()
   
-  #reverse the order of the rows
-  hm <- hm[rev(rownames(hm)),]
-  breaks <- sort(unique(as.vector(hm)))
-  heat_map <- ggheatmap(hm, filling = NULL) +
-  geom_tile(aes(fill = value), width = 0.98, color = "#2a5686") +
-  scale_x_continuous(expand = c(0,0), labels = rep(paste0("kar.", c(1:5)), times = 6))+ 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
-  labs(y = "Chromosome", fill = "Somy")+
-  scale_fill_manual(values = heat_col(breaks), breaks = breaks)+
-  facet_grid(switch = "x", drop = TRUE)+
-  theme(axis.text = element_text(), strip.text.x = element_text(), strip.placement = "outside") + #this fixes the postion of the panel labels to be below column labels, not above it 
-  theme(axis.text = element_text(), strip.text = element_text())+
-  anno_bottom()+
-  align_group(grp)+
-  anno_top() &
-  theme(panel.spacing = unit(10, "pt"))
+  col_groups <- col_groups[colnames(heat_matrix)]
   
-  bar_plot <- df %>%
-    ggplot(aes(x = karyo_position, y = proportion, label = ncells, fill = position_in_10X))+
-    geom_col(color = "black")+
+  #plot the heat map
+  heat_map <- ggheatmap(heat_matrix, filling = NULL) +
+    geom_tile(aes(fill = factor(value)), width = 0.98, color = "#2a5686") +
+    scale_x_continuous(expand = c(0,0), labels = as.character(karyo_labels))+ 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, color = label_colors))+
+    labs(y = "Chromosome", fill = "Somy")+
+    scale_fill_manual(values = heat_col(breaks), breaks = breaks)+
+    facet_grid(switch = "x", drop = TRUE)+
+    theme(axis.text = element_text(), strip.text.x = element_text(), strip.placement = "outside") + #this fixes the postion of the panel labels to be below column labels, not above it 
+    theme(axis.text = element_text(), strip.text = element_text())+
+    anno_bottom()+
+    align_group(col_groups)+
+    anno_top() &
+    theme(panel.spacing = unit(10, "pt"))
+  
+  
+  
+  #set a color scale for the bar plot to highlight the top 5 karyotypes in the 10X dataset
+  karyo_10X_colors <- setNames(
+    rev(brewer.pal(5, "Spectral")),
+    paste0("10X_kar.", 1:5)
+  )
+  
+  bar_plot <- karyo_df %>%
+    filter(karyo_name %in% colnames(heat_matrix)) %>%
+    mutate(color_label = ifelse(position_in_10X <= 5, paste0("10X_kar.", position_in_10X), NA)) %>%
+    ggplot(aes(x = karyo_position, y = proportion, label = ncells, fill = color_label))+
+    #geom_col(color = "black", alpha = 0.5)+
+    geom_col(color = "black", fill = "black")+
     geom_text(vjust = -0.3, size = 3.7, color = "white")+
     geom_text(vjust = -0.3, size = 3.5, color = "black")+
     facet_wrap(vars(sample), nrow = 1)+
-    #scale_y_continuous(limits = c(0, 1))+
     coord_cartesian(clip = "off")+
-    #{if(Strain == "BPK081")guides(fill = "none")}+
     ggtitle(Strain)+
     scale_x_discrete(name = NULL, breaks = NULL,  expand = c(0,0))+
-    scale_fill_manual(values = c(setNames(scico(9, palette = "lajolla")[3:7], c(1:5)), `not present` = "white", `not in top 5` = "lightgrey"))+
+    #scale_fill_manual(values = karyo_10X_colors, breaks = names(karyo_10X_colors))+
     theme_minimal()+
     theme(panel.grid = element_blank(),
           plot.margin = margin(0, 0, 0, 0),
@@ -175,59 +207,54 @@ for(Strain in c("BPK081", "HU3")){
           strip.clip = "off", 
           panel.spacing = unit(10, "pt"))
   
-  hm <- ggalign::align_plots(bar_plot, heat_map, ncol = 1, heights = c(0.2, 0.8), guides = "r") + layout_tags(NULL)
+  heat_map <- ggalign::align_plots(bar_plot, heat_map, ncol = 1, heights = c(0.2, 0.8), guides = "r") + layout_tags(NULL)
   
-  
-  ##plot the flow plot####
-  to_plot <- to_plot %>%
-    mutate(name = paste(experiment, strain, sample, sep = "<br>")) %>%
-    select(-proportion, -karyo_position, -karyo_id, -experiment, -strain, -sample) %>%
-    pivot_wider(names_from = name, values_from = ncells) %>%
-    pivot_longer(cols = -karyotype, values_to = "ncells") %>%
-    separate(name, into = c("experiment", "strain", "sample"), sep = "<br>")
-  
-  #make it pairwise
-  to_plot$`10X` <- NA
-  ncells_in_10X <- to_plot %>%
-    filter(strain == Strain & experiment == "10X") %>%
-    select(karyotype, ncells) %>%
-    deframe()
-  
-  to_plot <- to_plot %>%
-    mutate(`10X` = ifelse(strain == Strain, ncells_in_10X[karyotype], `10X`))
-
-  flow_plot <- to_plot %>%
-    mutate(sample = factor(sample, levels = sample_names)) %>%
-    filter(experiment != "10X") %>%
-    select(-experiment) %>%
-    rename(Atrandi = ncells) %>%
-    pivot_longer(cols = c(Atrandi, `10X`), names_to = "experiment", values_to = "ncells") %>%
-    mutate(ncells = ifelse(is.na(ncells), 0, ncells)) %>%
-    #mutate(experiment = fct_rev(factor(experiment))) %>%
-    group_by(sample, experiment) %>%
-    mutate(proportion = ncells/sum(ncells)) %>%
-    group_by(sample, strain, karyotype) %>%
-    mutate(max_prop = max(proportion, na.rm = TRUE)) %>%
-    arrange(strain, sample, desc(max_prop)) %>%
+  #now we format the data for the flow plot
+  #the flow plot requires that for every group, all barcodes are listed, even if they were not present there. In that case they should have a 0 count value.
+  #The easiest way for me to do that was to pivot the data wider (which adds the NAs to missing counts) and pivot it back to long, converting NAs to 0.
+  flow_plot_data <- karyo_df %>%
+    select(karyotype, strain, sample, ncells) %>% #select only the needed columns
+    mutate(name = paste(strain, sample, sep = "<br>")) %>% #stores the strain, experiment, and sample information in a single column `name` to help `pivot_wider` later
+    select(karyotype, name, ncells) %>% #select just the needed columns
+    pivot_wider(names_from = name, values_from = ncells) %>% #this ensures that all karyotypes are mentioned in all samples, with NA values when they were not present.
+    pivot_longer(cols = -karyotype, values_to = "ncells") %>% #convert back to long format, but now with NA added to karyotypes when they were missing from a given sample.
+    separate(name, into = c("strain", "sample"), sep = "<br>") %>% #reconstruct the `experiment`, `strain`, and `sample` columns stored in `name`
+    filter(sample != "10X") %>% #since we don't want to compare 10X datasets against itself
+    left_join(                             #this left_join block re-appends the number of cells for a given karyotype in the corresponding the 10X data
+      karyo_df %>%
+        filter(experiment == "10X") %>%
+        select(karyotype, ncells_in_10X),
+      by = "karyotype"
+    ) %>%
+    rename(`SPC-scDNA` = ncells, `10X-scDNA` = ncells_in_10X) %>% #we now want to have a single column named `experiment` specifying if it is from 10X of Atrandi datasets. So first we rename these two columns...
+    pivot_longer(cols = c(`SPC-scDNA`, `10X-scDNA`), names_to = "experiment", values_to = "ncells") %>% #then we pivot them wider. Now column `Atrandi` has the count in atrandi data, column `10X` has the count in the 10X data
+    mutate(ncells = ifelse(is.na(ncells), 0, ncells)) %>% #convert NA counts to 0 (because the karyotype was found in 0 cells in that sample).
     group_by(strain, sample, experiment) %>%
-    mutate(position = row_number()) %>%
-    mutate(color = ifelse(position <= 10, karyotype, NA)) %>%
-    mutate(experiment = c(Atrandi = "SPC-scDNA", `10X` = "10X-scDNA")[experiment]) %>%
-    select(experiment, proportion, karyotype, color, strain) %>%
-    ggplot(aes(x = experiment, y = proportion, alluvium = karyotype, stratum = karyotype, group = karyotype, fill = color))+
+    mutate(proportion = ncells/sum(ncells)) %>% #convert counts to relative proportions
+    ungroup() %>%
+    mutate(sample = factor(sample, levels = sample_names[sample_names %in% unique(sample)])) %>% #rearrange the samples according to the order set by the `sample_names` environment variable.
+    left_join(
+      karyo_df %>%
+        filter(sample == "10X" & karyo_position <= 5) %>%
+        arrange(desc(ncells)) %>%
+        mutate(color_label = paste0("10X_kar.", karyo_position)) %>%
+        select(karyotype, color_label),
+      by = "karyotype"
+    )
+  
+  #finally, make the flow plot  
+  flow_plot <- flow_plot_data %>%
+    ggplot(aes(x = experiment, y = proportion, alluvium = karyotype, stratum = karyotype, group = karyotype, fill = color_label))+
     geom_alluvium(decreasing = FALSE, color = NA)+
-    #geom_flow(decreasing = FALSE, color = NA)+
-    #geom_stratum(decreasing = FALSE, alpha = 0.8, color = NA)+
-    guides(fill = "none")+
+    #guides(fill = "none")+
     scale_x_discrete(name = NULL, expand = c(0.1, 0.1))+
     scale_y_continuous(expand = c(0,0))+
     facet_wrap(vars(sample), ncol = 1)+
-    theme(legend.position = "right")
+    theme(legend.position = "right")+
+    scale_fill_manual(values = karyo_10X_colors, breaks = names(karyo_10X_colors))+
+    labs(fill = "Top 5 karyotypes\nin 10X dataset")
   
-  flow_plot <- flow_plot + scale_fill_manual(values = create_colors(flow_plot$data$color, palette = "colorblind friendly"))
-  #flow_plot <- ggalign::align_plots(NULL, flow_plot, ncol = 1, heights = c(0.2, 0.8)) + layout_tags(NULL)
-  
-  figures[[length(figures) + 1]] <- ggalign::align_plots(hm, free_border(flow_plot), nrow = 1, widths = c(0.8, 0.2))
+  figures[[length(figures) + 1]] <- ggalign::align_plots(heat_map, free_border(flow_plot), nrow = 1, widths = c(0.8, 0.2))
 }
 
 final <- ggalign::align_plots(figures[[1]], figures[[2]], figures[[3]], ncol = 1, heights = c(0.3, 0.35, 0.35))
@@ -235,13 +262,13 @@ final <- final + layout_tags("A") + layout_theme(plot.tag = element_text(size = 
 
 #save the final figure panel####
 plot_scale <- 1.8
-ggsave("figure_3.pdf", plot = final, width = 8.27 * plot_scale, height = 10.5 * plot_scale)
+ggsave("figure_3.pdf", plot = final, width = 8.27 * plot_scale, height = 9.5 * plot_scale)
 
 #open it
 if (Sys.info()["sysname"] == "Darwin") {
-system2("open", args = "figure_3.pdf", wait = FALSE)
+  system2("open", args = "figure_3.pdf", wait = FALSE)
 } else if (Sys.info()["sysname"] == "Linux") {
-system2("xdg-open", args = "figure_3.pdf", wait = FALSE)
+  system2("xdg-open", args = "figure_3.pdf", wait = FALSE)
 }
 
 
