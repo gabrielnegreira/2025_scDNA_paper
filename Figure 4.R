@@ -102,7 +102,13 @@ for(Sample in paste("Sample", c(1,2,3,5,6))){
       color_range <- quantile(mat, c(0, 0.99))
       #cap max value
       mat[mat > quantile(mat, 0.99)] <- quantile(mat, 0.99)
+      
+      #set horizontal lines
+      hline_pos <- list(Ld29 = c(100, 137),
+                        Ld36 = c(99, 185))[[Chromosome]]
+      
       hm <- ggheatmap(mat)+
+        geom_hline(yintercept = hline_pos, color = "grey90", linetype = "dashed", linewidth = 1)+
         scale_x_discrete(breaks = NULL)+
         scale_y_continuous(breaks = names(breaks), labels = breaks)+
         theme(axis.text = element_text())+
@@ -157,8 +163,3 @@ if (Sys.info()["sysname"] == "Darwin") {
 } else if (Sys.info()["sysname"] == "Linux") {
   system2("xdg-open", args = "figure_4.pdf", wait = FALSE)
 }
-
-data.frame(counts = rowSums(mat)) %>%
-  rownames_to_column("bin_number") %>%
-  ggplot(aes(x = bin_number, y = counts))+
-  geom_point()
