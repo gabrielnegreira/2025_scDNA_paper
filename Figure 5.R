@@ -18,83 +18,138 @@ library(ggstar)
 library(parallel)
 source("color_palettes.R")
 
+#set inputs path
+eig_vectors_dir <- "inputs/nucleotide_variants/plink_pca/"
+drugs_data_dir <- "inputs/nucleotide_variants/drugs_data/"
+allele_depth_dir <- "inputs/nucleotide_variants/allele_depth_matrices/"
+scDNAobjs_dir <- "inputs/karyotyping_objects/"
+cell_meta_dir <- "inputs/cell_qc/"
 
 #get inputs####
-## get scDNA object of true cells
-true_cells <- read_rds("inputs/karyotyping_objects/true_cells.rds")
-drug_data <- read.xlsx("inputs/nucleotide_variants/drug_resistance_Ldon_v2.xlsx", sheetIndex = 1)
-
-#get cells metadata
-cells_meta <- read_delim("inputs/cell_qc/cells_meta.tsv") %>%
-  column_to_rownames("rowname") %>%
-  filter(cell_or_background == "cell" & strain != "doublet" & sample != "Sample 4") %>%
-  mutate(sample = factor(sample_names[sample], levels = sample_names))
-
+## get scDNA objects
+true_cells <- read_rds(paste0(scDNAobjs_dir, "/true_cells.rds"))
+## get genomic sites of drug resistance markers
+drug_data <- read.xlsx(paste0(drugs_data_dir, "/drug_resistance_Ldon_v2.xlsx"), sheetIndex = 1)
+#get cells metadata for all SPCs
+cells_meta <- read_rds(paste0(scDNAobjs_dir, "/all_SPCs.rds")) %>%
+  lapply(function(x) x$metadata$cells_meta) %>%
+  bind_rows() %>%
+  mutate(
+    sample = sample_names[sample],
+    simple_barcode = gsub("_.*", "", barcode) #since pieter did the pca data without the numeric index in the barcode, I create an extra column with barcodes without this index.
+    )
+  
 #plot figure 5A####
-##get PCA eigen vectors
-pca_files <- list.files("inputs/nucleotide_variants/", pattern = "pca.eigenvec")
-pca_data <- list()
-for(i in seq_along(pca_files)){
-  Sample <-  as.integer(gsub(".*sample_(\\d+)_.*", "\\1", pca_files[[i]]))
-  index = ifelse(Sample >= 5, Sample - 1, Sample)
-  pca_data[[i]] <- read_delim(paste0("inputs/nucleotide_variants/", pca_files[[i]])) %>%
+##get PCA eigen vectors and eigen values
+### first adjust sample_names to match the pca files
+names(sample_names) <- gsub("Sample ", "sample_", names(sample_names)) #make the sample names match the pca files
+sample_names <- sample_names[grepl("sample_", names(sample_names))] #keep only the spc samples
+sample_names <- sample_names[names(sample_names) != "sample_4"]
+
+#now find the files
+eig_vectors_files <- list.files(eig_vectors_dir, pattern = "pca.eigenvec")
+eig_values_files <- list.files(eig_vectors_dir, pattern = "pca.eigenval")
+
+#load the files and format them for each sample
+eig_vectors <- list()
+eig_values <- list()
+
+for(Sample in names(sample_names)){
+  #get the file names for the sample
+  eig_vec <- eig_vectors_files[grepl(Sample, eig_vectors_files)]
+  eig_val <- eig_values_files[grepl(Sample, eig_values_files)]
+  
+  #read the files
+  ##get the eigen values and store in a list
+  eig_vec <-  read_delim(paste0(eig_vectors_dir, eig_vec))
+  PCs <- colnames(eig_vec)[grepl("PC", colnames(eig_vec))]
+  eig_values[[Sample]] <- data.frame(
+    PC = PCs, 
+    eigen_value = read_lines(paste0(eig_vectors_dir, eig_val)), 
+    sample = unname(sample_names[Sample])) %>%
+    mutate(
+      eigen_value = as.numeric(eigen_value),
+      eigen_percentage = eigen_value / sum(eigen_value)
+      )
+  
+  #get the eigen vector file and store in a list
+  eig_vectors[[Sample]] <- eig_vec %>%
+    bind_rows(.id = "table") %>%
     select(-`#FID`) %>%
-    rename(cell = IID) %>%
-    mutate(cell = gsub("_", "", cell)) %>%
-    mutate(sample = Sample) %>%
-    mutate(strain = true_cells[[index]]$metadata$cells_meta[cell,]$strain)
+    rename(barcode = IID) %>%
+    mutate(barcode = gsub("_", "", barcode)) %>%
+    mutate(sample = sample_names[Sample])
 }
 
-##merge them in a single data frame
-pca_data <- bind_rows(pca_data)
-##plot it
-figure_5A <- pca_data %>%
-  mutate(sample = paste("Sample", sample)) %>%
-  mutate(sample = factor(sample_names[sample], levels = sample_names)) %>%
-  mutate(strain = ifelse(is.na(strain), "doublet", strain)) %>%
+eig_values <- bind_rows(eig_values)
+
+##merge them in a single data frame and append strain information from cells_meta
+eig_vectors <- bind_rows(eig_vectors) %>%
+  left_join(
+    cells_meta %>%
+      select(-barcode) %>%
+      rename(barcode = simple_barcode) %>% 
+      group_by(barcode) %>%
+      mutate(n = n()) %>% #there is one barcode (AGGTCCAACGCTACTACACCATCTTTCCACTC) which is present in both scDNA_AT_01 and scDNA_AT_02 libraries. without the number ID I can't tell which is which, so remove it here
+      filter(n == 1) %>%
+      select(barcode, sample, strain, cell_or_background),
+    by = c("sample", "barcode")
+  ) %>%
+  mutate(strain = ifelse(is.na(strain), "doublet", strain)) %>% #doublets are not present in cells_meta, so they are assigned as NAs. Fix it here.
+  mutate(sample = factor(sample, levels = sample_names[sample_names %in% sample])) #to rearrange sample by the order specified in `sample_names`
+
+
+
+#plot the PCA####
+##first create axis labels for the PCs
+eig_labels <- eig_values %>%
+  filter(PC %in% c("PC1", "PC2")) %>%
+  group_by(PC) %>%
+  summarise(min_percent = min(eigen_percentage), max_percent = max(eigen_percentage)) %>%
+  mutate(label = paste0(PC, " (", round(min_percent * 100, 2), "% - ", round(max_percent * 100, 2), "%", ")")) %>%
+  select(PC, label) %>%
+  deframe()
+
+figure_5A <- eig_vectors %>%
   ggplot(aes(x = PC1, y = PC2, fill = strain))+
   geom_point(size = 2, shape = 21, stroke = 0.1)+
   facet_wrap(vars(sample), scales = 'free', nrow = 1)+
   guides(color = guide_legend(override.aes = list(size = 2)))+
   scale_fill_manual(values = c(strain_colors, doublet = "grey"))+
+  labs(x = eig_labels[["PC1"]], y = eig_labels[["PC2"]])+
   theme_bw()
 
-#plot distribution of NA values
-##first we need to fix matrix col names
-barcodes <- cells_meta %>%
-  rownames_to_column("correct_barcode") %>%
-  mutate(simple_barcode = gsub("_.*", "", correct_barcode)) %>%
-  select(simple_barcode, correct_barcode) %>%
-  deframe()
 
-
+#plot distribution of NA values####
+##basically this summarises how many sites could not be resolved in each cell
 mat_list <- list()
-for(Sample in c("sample_1", "sample_2", "sample_3", "sample_5", "sample_6")){
-  mat <- vroom::vroom(paste0("inputs/nucleotide_variants/", Sample, "_ad_matrix.tsv"), col_types = cols(.default = col_character())) %>%
+for(Sample in names(sample_names)){
+  #get the allele depth matrix.
+  mat <- vroom::vroom(paste0(allele_depth_dir, "/", Sample, "_ad_matrix.tsv"), col_types = cols(.default = col_character())) %>%
+    select(-last_col()) %>% # don't know why but the last column is just an empty column, so remove it here. 
     mutate(site = paste0(chromosome, "_", position)) %>%
     select(-chromosome, -position) %>%
-    column_to_rownames("site")
+    column_to_rownames("site") %>%
+    select(any_of(cells_meta$simple_barcode)) #keep only barcodes that have a cell metadata (should be all of them but just to make sure)
   
-  mat <- mat[,-ncol(mat)]
-  mat <- mat[,which(colnames(mat) %in% names(barcodes))]
-  
-  colnames(mat) <- barcodes[colnames(mat)]
-  
-  Sample <- gsub("sample", "Sample", Sample)
-  Sample <- gsub("_", " ", Sample)
   Sample <- sample_names[Sample]
   mat_list[[Sample]] <- mat
 }
 
 
+#calculate for each site the percentage of cells which could not resolve that site (allele depth = 0,0)
 NA_plot <- list()
 for(Sample in names(mat_list)){
   NA_plot[[Sample]] <- data.frame(sample = Sample, mean_NA = rowMeans(mat_list[[Sample]] == "0,0", na.rm = TRUE))
 }
 
-figure_5B <- NA_plot %>%
+#convert it to a single data frame
+NA_plot <- NA_plot %>%
   bind_rows() %>%
-  mutate(sample = factor(sample, levels = sample_names)) %>%
+  mutate(sample = factor(sample, levels = sample_names[sample_names %in% sample])) 
+
+#plot it
+figure_5B <- NA_plot %>%
   ggplot(aes(y = 1-mean_NA, x = sample))+
   geom_violin(aes(fill = sample))+
   geom_boxplot(width = 0.075, outlier.size = 0.1, size = 0.2)+
@@ -109,26 +164,21 @@ figure_5B <- NA_plot %>%
 ##first we need to get the drug-resistance positions to make sure they are included in the heatmap
 #get strain anotation
 strains <- cells_meta %>%
-  rownames_to_column("cell") %>%
-  select(cell, strain) %>%
+  select(simple_barcode, strain) %>%
   deframe()
 
+#get the snp effect data for sample_6. It will be used for both plots
+snpeff_data <- read.delim(paste0(drugs_data_dir, "/sample_6.filtered.drugs.snpeff.csv")) %>%
+    fuzzy_inner_join( #append the drug markers data
+      drug_data,
+      by = c("CHROM" = "chrom", "POS" = "start", "POS" = "end"),
+      match_fun = list(`==`, `>=`, `<=`)
+    ) %>%
+  filter(!ANN.0..EFFECT %in% c("synonymous_variant")) %>% #removes synonymous variants
+  mutate(row = paste0(CHROM, "_", POS)) #create a column for the row name combining the chromosome and position
+  
 plot_list <- list()
-for(Sample in c("Sample 2", "Sample 6")){
-  sample_number <- as.integer(gsub("Sample ", "", Sample))
-  Sample <- sample_names[Sample]
-  snpeff_data <- read.delim(paste0("inputs/nucleotide_variants/sample_6.filtered.drugs.snpeff.csv"))
-  #add the drug_data to the sneff_data
-  snpeff_data <- fuzzy_inner_join(snpeff_data, drug_data,
-                                  by = c("CHROM" = "chrom", "POS" = "start", "POS" = "end"),
-                                  match_fun = list(`==`, `>=`, `<=`))
-  snpeff_data <- snpeff_data %>%
-    mutate(row = paste0(CHROM, "_", POS))
-  
-  #remove synonymous mutations
-  snpeff_data <- snpeff_data %>%
-    filter(!ANN.0..EFFECT %in% c("synonymous_variant"))
-  
+for(Sample in c("SPC-STD2", "SPC-PTA2")){
   ##get the data frequency matrix
   hm_mat <- mat_list[[Sample]]
   ##make sure drug rows are in the matrix
@@ -139,6 +189,7 @@ for(Sample in c("Sample 2", "Sample 6")){
   hm_mat <- hm_mat[rows,] #subset the matrix.
   
   ##convert it to allele frequency
+  ### since this is a complex task I paralellize here
   p <- detectCores() - 1L
   
   res_list <- mclapply(seq_len(ncol(hm_mat)), function(j){
@@ -159,13 +210,13 @@ for(Sample in c("Sample 2", "Sample 6")){
   #cluster the cells
   hclust_cells <- hclust(daisy(t(hm_mat), metric = "gower"), method = "ward.D2")
   
+  #arrange rows by mean allele frequency (placing the the strain defining ones on top)
   vars_order <- rowMeans(hm_mat, na.rm = TRUE)
   vars_order <- sort(vars_order)
   vars_order <- names(vars_order)
-  
   hm_mat <- hm_mat[vars_order,]
   
-  row_idx <- which(rownames(hm_mat) %in% snpeff_data$row)
+ 
   major_hm <- ggheatmap(hm_mat)+
     scale_x_discrete(name = NULL, breaks = NULL)+
     scale_y_discrete(name = NULL, breaks = NULL)+
@@ -187,7 +238,9 @@ for(Sample in c("Sample 2", "Sample 6")){
     theme_void()+
     theme(legend.position = "top")
   
-  if(Sample == "Sample 6"){
+  if(Sample == "SPC-PTA2"){
+    #get the index of the rows that contain the drug-resistance variants, to highlight them with arrows in 
+    row_idx <- which(rownames(hm_mat) %in% snpeff_data$row)
     major_hm <- major_hm +
       anno_right(size = 0.1)+
       ggalign(data = seq_len(nrow(hm_mat))) +
@@ -238,8 +291,8 @@ rows_to_bar <- which(rows_to_bar > 0.05)
 #prepare a dataframe for the barplot
 bar_data <- hm_drug[rows_to_bar, ] %>%
   as_tibble(rownames = "locus") %>%
-  pivot_longer(cols = -locus, names_to = "cell", values_to = "allele") %>%
-  mutate(strain = strains[cell]) %>%
+  pivot_longer(cols = -locus, names_to = "barcode", values_to = "allele") %>%
+  mutate(strain = strains[barcode]) %>%
   filter(strain == "HU3") 
 
 drug_hm <- ggheatmap(hm_drug)+
