@@ -45,50 +45,6 @@ cells_meta <- cells_meta %>%
 figures <- list()
 
 ##plot figure 2A####
-figures[[length(figures) + 1]] <- bins_meta %>%
-  #filter(experiment == "Atrandi") %>%
-  select(sample, gc_content, mean_raw_counts, mean_corrected_counts) %>%
-  filter(sample != "SPC-STD4") %>%
-  pivot_longer(cols = c(mean_raw_counts, mean_corrected_counts), values_to = "count", names_to = "count_type") %>%
-  mutate(count_type = c(mean_raw_counts = "Raw Counts", mean_corrected_counts = "Corrected Counts")[count_type]) %>%
-  group_by(sample, count_type) %>%
-  filter(!count %in% boxplot.stats(count)$out) %>%
-  ggplot(aes(x = gc_content, y = count))+
-  geom_point()+
-  geom_smooth(method = "lm", se = FALSE, color = "blue", linewidth = 1) +  # Linear model line
-  scale_x_continuous(limits = c(0.5, 0.7))+
-  labs(x = "GC content", y = "Read Counts")+
-  facet_grid(rows = vars(sample), cols = vars(fct_rev(count_type)), scales = "free")+
-  theme_bw()+
-  theme(panel.grid.minor = element_blank())
-
-##plot figure 2B####
-#compare raw vs corrected counts
-to_plot <- list()
-to_plot[["raw"]] <- lapply(true_cells, function(x)x$counts$raw_counts)
-breaks <- unique(bins_meta$chromosome)
-breaks <- breaks[seq(1, 35, by = 2)]
-
-figures[[length(figures) + 1]] <- bins_meta %>%
-  #filter(experiment == "Atrandi") %>%
-  group_by(sample) %>%
-  mutate(bin_position = row_number()) %>%
-  filter(!is_outlier & !is_empty) %>%
-  filter(sample != "SPC-STD4") %>%
-  pivot_longer(cols = c("mean_raw_counts", "mean_corrected_counts"), names_to = "count_type", values_to = "count") %>%
-  group_by(sample, chromosome) %>%
-  filter(!count %in% boxplot.stats(count)) %>%
-  mutate(count_type = c(mean_raw_counts = "Raw Counts", mean_corrected_counts = "Corrected Counts")[count_type]) %>%
-  ggplot(aes(x = chromosome, y = count))+
-  geom_boxplot(outliers = FALSE)+
-  scale_x_discrete(breaks = breaks, labels = seq(1, 35, by = 2))+
-  guides(color = "none")+
-  labs(x = "Chromosome", y = "Mean count")+
-  facet_grid(cols = vars(fct_rev(count_type)), rows = vars(sample), scale = "free")+
-  theme_bw()+
-  theme(panel.grid.minor = element_blank(), panel.grid.major.x = element_blank())
-
-##plot figure 2C#####
 ##compare lorenz curves with and without GC correction
 ###since the 10X data has more rows than the Atrandi data, will group rows into 100 bins and take their average.
 n_bins <-1000
@@ -181,7 +137,7 @@ figures[[length(figures) + 1]] <- lorenz_df %>%
   theme_bw()+
   theme(panel.grid = element_blank())
 
-##plot figure 2D####
+##plot figure 2B####
 plot_list <- list()
 min_ncells <- cells_meta %>%
   mutate(sample = ifelse(experiment == "10X", "10X", sample)) %>%
@@ -229,7 +185,7 @@ for(metric in c("gini", "mapd", "ICF_score")){
 #combine them
 figures[[length(figures) + 1]] <- ggalign::align_plots(!!!plot_list, nrow = 1)
 
-##plot_figure 2E####
+##plot_figure 2C####
 ###creat a color pallete
 breaks <- lapply(true_cells, function(x)x$counts$normalized_counts) #get the normalized counts of each sample
 breaks <- breaks[c(1,5)] #subset only samples 1 and 5
@@ -304,8 +260,7 @@ for(i in c("10X", "SPC-STD2", "SPC-PTA2")){
 figures[[length(figures) + 1]] <- ggalign::align_plots(!!!plot_list, guides = "rltb")
 
 top <- ggalign::align_plots(!!!figures[c(1, 2)], widths = c(0.2, 0.8))
-middle <- ggalign::align_plots(free_border(figures[[3]], borders = "b"), figures[[4]], widths = c(0.2, 0.8))
-final <- ggalign::align_plots(middle, figures[[5]], ncol = 1, heights = c(0.25, 0.75))
+final <- ggalign::align_plots(top, figures[[3]], ncol = 1, heights = c(0.25, 0.75))
 final <- final + layout_tags("A") + layout_theme(plot.tag = element_text(size = 16))
 
 #save the final figure panel####
