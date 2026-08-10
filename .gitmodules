@@ -7,3 +7,7 @@
 [submodule "git_modules/Illumina_tools"]
 	path = git_modules/Illumina_tools
 	url = git@github.com:gabrielnegreira/Illumina_tools
+[submodule "git_modules/HapCNV"]
+	path = git_modules/HapCNV
+	url = git@github.com:gabrielnegreira/HapCNV
+
