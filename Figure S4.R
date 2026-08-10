@@ -102,13 +102,13 @@ final
 
 #save the final figure panel####
 plot_scale <- 1.8
-ggsave("figure_S3.pdf", plot = final, width = 8.27 * plot_scale, height = 7 * plot_scale)
+ggsave("figure_S4.pdf", plot = final, width = 8.27 * plot_scale, height = 7 * plot_scale)
 
 
 #open it
 if (Sys.info()["sysname"] == "Darwin") {
-  system2("open", args = "figure_S3.pdf", wait = FALSE)
+  system2("open", args = "figure_S4.pdf", wait = FALSE)
 } else if (Sys.info()["sysname"] == "Linux") {
-  system2("xdg-open", args = "figure_S3.pdf", wait = FALSE)
+  system2("xdg-open", args = "figure_S4.pdf", wait = FALSE)
 }
 
