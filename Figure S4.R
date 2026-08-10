@@ -81,7 +81,7 @@ for(Strain in unique(to_plot$strain)){
     geom_smooth(method = "lm", se = FALSE, linewidth = 0.5)+
     labs(title = Strain, x = "GC content", y = "normalized mean count")+
     facet_grid(rows = vars(count_type), cols = vars(sample))+
-    scale_x_continuous(limits = c(0.5, 0.7))+
+    scale_x_continuous(limits = c(0.5, 0.7), breaks = c(0:10)/10)+
     scale_y_continuous(limits = c(0, 3))
   
   index <- index + 1
@@ -97,7 +97,7 @@ for(Strain in unique(to_plot$strain)){
 
 top <- ggalign::align_plots(plot_list[[1]], plot_list[[3]]) + layout_tags(NULL)
 bottom <- ggalign::align_plots(plot_list[[2]], plot_list[[4]]) + layout_tags(NULL)
-final <- ggalign::align_plots(top, bottom, ncol = 1, heights = c(0.3, 0.6)) + layout_tags("A")
+final <- ggalign::align_plots(top, bottom, ncol = 1, heights = c(0.2, 0.8)) + layout_tags("A")
 final
 
 #save the final figure panel####
