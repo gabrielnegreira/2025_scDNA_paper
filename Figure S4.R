@@ -86,6 +86,7 @@ for(Strain in unique(to_plot$strain)){
   
   index <- index + 1
   plot_list[[index]] <- to_plot %>%
+    filter(strain == Strain) %>%
     ggplot(aes(x = bin_number, y = mean_count, color = chromosome))+
     geom_point()+
     guides(color = "none")+
