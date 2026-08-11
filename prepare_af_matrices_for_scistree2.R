@@ -16,7 +16,7 @@ plan(multisession, workers = parallel::detectCores() - 1)
 NA_threshold <- 0.4
 
 #get the data
-matrices <- list.files("inputs/nucleotide_variants/", pattern = "ad_matrix.tsv")
+matrices <- list.files("inputs/nucleotide_variants/allele_depth_matrices/", pattern = "ad_matrix.tsv")
 
 #get cells_metadata (needed for spliting matrices by strain)
 cells_meta <- read_delim("inputs/cell_qc/cells_meta.tsv") %>%
@@ -30,7 +30,7 @@ cells_meta <- read_delim("inputs/cell_qc/cells_meta.tsv") %>%
 #create a function to process the matrices so it can run in parallel
 process_one_matrix <- function(mfile) {
   #get matrix
-  original_mat <- vroom::vroom(file.path("inputs/nucleotide_variants", mfile), show_col_types = FALSE, col_types = cols(.default = col_character()))
+  original_mat <- vroom::vroom(file.path("inputs/nucleotide_variants/allele_depth_matrices/", mfile), show_col_types = FALSE, col_types = cols(.default = col_character()))
   
   # drop all-NA columns
   keep <- !apply(original_mat, 2, function(x) all(is.na(x)))
@@ -93,11 +93,11 @@ process_one_matrix <- function(mfile) {
     mat <- mat[loci,]
     prop_mat <- prop_mat[loci,]
     
-    #replace heterozygous loci with by reference
+    #replace heterozygous loci with reference
     mat[, 3:ncol(mat)] <- lapply(mat[, 3:ncol(prop_mat)], function(col) {
       sp <- strsplit(col, ",", fixed = TRUE)
-      ref <- vapply(sp, function(z) as.integer(z[[1]]), integer(1L))
-      alt <- vapply(sp, function(z) as.integer(z[[2]]), integer(1L))
+      ref <- vapply(sp, function(z) as.integer(z[[1]]), integer(1L)) #takes left character
+      alt <- vapply(sp, function(z) as.integer(z[[2]]), integer(1L)) #takes right character
       
       #convert heterozygous loci to homozygous reference
       ref <- ifelse(alt > 0 & ref > 0, alt + ref, ref) 
@@ -113,7 +113,7 @@ process_one_matrix <- function(mfile) {
       return(col)
     }) 
     
-    #remove rows with too name NA values
+    #remove rows with too many NA values
     NA_to_remove <- data.frame(row = rownames(prop_mat),
                                position = prop_mat$position, 
                                chromosome = prop_mat$chromosome, 
@@ -155,13 +155,13 @@ process_one_matrix <- function(mfile) {
       select(-chromosome, -position) 
     
     #export the plot
-    ggsave(plot, file = paste0("inputs/nucleotide_variants/",mat_sample, "_", Strain, "_NA_removal_plot.pdf"), height = 60, width = 5, units = "in", limitsize = FALSE)
+    ggsave(plot, file = paste0("inputs/nucleotide_variants/scistree2_data/",mat_sample, "_", Strain, "_NA_removal_plot.pdf"), height = 60, width = 5, units = "in", limitsize = FALSE)
     
     #export the matrix
     file_name <- paste0(mat_sample, "_", Strain, "_ad_matrix_for_scistree2.tsv")
     mat %>%
       rownames_to_column(var = "site") %>%
-      write_tsv(file = paste0("inputs/nucleotide_variants/", file_name), col_names = TRUE) 
+      write_tsv(file = paste0("inputs/nucleotide_variants/scistree2_data/", file_name), col_names = TRUE) 
   }
 }
 
