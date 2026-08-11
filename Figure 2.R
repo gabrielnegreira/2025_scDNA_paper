@@ -73,14 +73,12 @@ lorenz_df <- lapply(true_cells, function(x){
       new_mat[row_group,] <- colMeans(mat[rows,,drop = FALSE])
     }
     #now for each cell (col), calculate the sorted cumulative sum
-    new_mat <- apply(mat, 2, function(col){
+    new_mat <- apply(new_mat, 2, function(col){
       col <- sort(col)
       col <- cumsum(col)
       col <- col/max(col)
       return(col)
     })
-    #normalize the matrix
-    #new_mat[,] <- apply(new_mat, 2, function(x)x/sum(x))
     
     #convert the matrix to long data frame, compute the mean count and the standard error
     new_mat <- as.data.frame(new_mat) %>%
@@ -132,7 +130,7 @@ figures[[length(figures) + 1]] <- lorenz_df %>%
   geom_text_repel(data = labels_df, aes(x = x, y = y, label = label), show.legend = FALSE, force = 30, nudge_x = 0.2, size = 2, min.segment.length = 0)+
   #facet_wrap(vars(sample), ncol = 1)+
   guides(color = "none")+
-  labs(x = "Fraction of the genome", y = "cumulative fraction of counts")+
+  labs(x = "Cumulative share of the genome\n(from lowest to highest count)", y = "cumulative share of counts")+
   scale_color_manual(values = sample_colors)+
   theme_bw()+
   theme(panel.grid = element_blank())
@@ -259,7 +257,7 @@ for(i in c("10X", "SPC-STD2", "SPC-PTA2")){
 #align both figures
 figures[[length(figures) + 1]] <- ggalign::align_plots(!!!plot_list, guides = "rltb")
 
-top <- ggalign::align_plots(!!!figures[c(1, 2)], widths = c(0.2, 0.8))
+top <- ggalign::align_plots(free_lab(figures[[1]]), figures[[2]], widths = c(0.2, 0.8))
 final <- ggalign::align_plots(top, figures[[3]], ncol = 1, heights = c(0.25, 0.75))
 final <- final + layout_tags("A") + layout_theme(plot.tag = element_text(size = 16))
 
