@@ -130,7 +130,13 @@ for(Sample in names(sample_names)){
     mutate(site = paste0(chromosome, "_", position)) %>%
     select(-chromosome, -position) %>%
     column_to_rownames("site") %>%
-    select(any_of(cells_meta$simple_barcode)) #keep only barcodes that have a cell metadata (should be all of them but just to make sure)
+    select( #remove doublets
+      any_of(
+        cells_meta %>%
+          filter(strain != "doublet") %>%
+          pull(simple_barcode)
+        )
+      ) 
   
   Sample <- sample_names[Sample]
   mat_list[[Sample]] <- mat
@@ -206,6 +212,8 @@ for(Sample in c("SPC-STD2", "SPC-PTA2")){
   dimnames(res) <- dimnames(hm_mat)
   hm_mat <- res
   rm(res)
+  
+  #
   
   #cluster the cells
   hclust_cells <- hclust(daisy(t(hm_mat), metric = "gower"), method = "ward.D2")
