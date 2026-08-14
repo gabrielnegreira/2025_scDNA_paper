@@ -32,3 +32,31 @@ https://doi.org/10.7554/eLife.109350.1
 12) `generate_figures.sh`: This is a small script that runs all `Figure X.R` scripts and convert the figure panels (pdf) to png. 
 
 Order to run: `generate_karyotyping_objects.R` -> `generate_cells_metadata.R` -> `ScisTree2.py` -> `generate_figures.sh`
+
+## Additional scripts
+
+### CNV analysis
+
+- `CNV_depth2cnv.py`: Calculates the median coverage for each gene from a samtools depth file and normalizes it against the median coverage of the corresponding chromosome. Writes the results to a `.cnv.csv` file.
+- `CNV_depth2cnv.R`: Combines per-cell CNV results, generates sample heatmaps, and plots the distributions of zero-coverage genes and chromosome-level median coverage.
+- `CNV_depth2cnv_wrapper.slurm`: SLURM wrapper for running `CNV_depth2cnv.py` on one or more coverage files.
+
+### Barcode demultiplexing
+
+- `demux_barcodes_dominant.py`: Counts the four 8-base barcode segments in FASTQ reads, retains barcodes above a minimum read count, and checks them against the Atrandi whitelist.
+- `demux_barcodes_getreads.py`: Finds FASTQ read IDs matching a barcode, allowing a configurable Hamming distance for each barcode segment.
+- `demux_barcodes_getreads.slurm`: SLURM workflow that extracts barcode-matched reads from paired FASTQ files with `seqtk` and removes the barcode sequence with `cutadapt`.
+
+### Drug-resistance analysis
+
+- `drugs_subset_vcf.sh`: Subsets the filtered sample VCFs to genomic regions associated with drug resistance using `bcftools`.
+- `drugs_snpeff.sh`: Annotates the drug-resistance VCFs with SnpEff and extracts selected variant annotations with SnpSift.
+- `drugs_plotting.R`: Creates genotype heatmaps and per-variant plots for coding and potentially impactful drug-resistance variants, adding gene and drug annotations.
+
+### Evolutionary single-cell analysis
+
+- `evo_sc_GATK_haplotypecaller.slurm`: Runs GATK HaplotypeCaller in GVCF mode for the selected single-cell BAM files.
+- `evo_sc_GATK_combinegvcfs_commands.py`: Links per-cell GVCF files into sample-specific directories based on the cell metadata.
+- `evo_sc_GATK_combinegvcfs_and_genotype.slurm`: Combines per-cell GVCFs, performs joint genotyping, filters SNPs and indels, and merges the filtered variants.
+- `evo_sc_GATK_vcf_filtering.sh`: Filters SNP VCFs by minor allele frequency and missing genotype rate for the HU3 and BPK081 strains.
+- `evo_sc_deeptools.slurm`: Runs deepTools `bamCoverage` to generate normalized or unnormalized genome-wide coverage tracks from BAM files.
