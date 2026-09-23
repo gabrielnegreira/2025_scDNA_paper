@@ -323,7 +323,8 @@ drug_hm <- ggheatmap(hm_drug)+
   ggalign(data = strains[colnames(hm_mat)], size = 0.3)+ 
   geom_tile(aes(y = 1, fill = factor(value))) +
   scale_fill_manual(name = "Strain", values = strain_colors)+ 
-  theme_void()
+  theme_void()+
+  theme(legend.position = "top")
 #anno_right()+
 #ggmark(mark_line(rows_to_bar))+
 #geom_bar(data = bar_data, aes(fill = allele, x = locus), position = "fill", show.legend = FALSE, na.rm = TRUE)+
